@@ -1,8 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "papi_memory.h"
 
-#include "common_defs.h"
+#include "common.h"
 #include "debug_comp.h"
 #include "htable.h"
 
@@ -12,7 +13,7 @@ int initialize_dynamic_event_list_size(event_list_t * evt_table, int size)
 {
     evt_table->capacity = size;
     evt_table->count = 0;
-    evt_table->evts = (struct eventname_id_s *) calloc (evt_table->capacity, sizeof(struct eventname_id_s));
+    evt_table->evts = (event_rec_t *) papi_calloc (evt_table->capacity, sizeof(event_rec_t));
     if (evt_table->evts == NULL) {
         ERRDBG("Error allocating memory for dynamic event table.\n");
         return PAPI_ENOMEM;
@@ -28,16 +29,12 @@ int initialize_dynamic_event_list(event_list_t * evt_table)
 
 static int reallocate_array(event_list_t *evt_table)
 {
-    unsigned int new_capacity = evt_table->capacity * 2;
-    struct eventname_id_s *tmp = (struct eventname_id_s *) calloc(new_capacity, sizeof(struct eventname_id_s));
-    if (tmp == NULL) {
+    evt_table->capacity *= 2;
+    evt_table->evts = (event_rec_t *) papi_realloc(evt_table->evts, evt_table->capacity * sizeof(event_rec_t));
+    if (evt_table == NULL) {
         ERRDBG("Failed to expand event_table array.\n");
         return PAPI_ENOMEM;
     }
-    memcpy(tmp, evt_table->evts, evt_table->capacity * sizeof(struct eventname_id_s));
-    free(evt_table->evts);
-    evt_table->evts = tmp;
-    evt_table->capacity = new_capacity;
     return PAPI_OK;
 }
 
@@ -76,9 +73,9 @@ int find_event_name(event_list_t *evt_table, const char *evt_name, event_rec_t *
     return PAPI_ENOEVNT;
 }
 
-void free_event_name_list(struct event_name_list_s *evt_table)
+void free_event_name_list(event_list_t *evt_table)
 {
-    free(evt_table->evts);
+    papi_free(evt_table->evts);
     htable_shutdown(evt_table->htable);
     evt_table->evts = NULL;
 }

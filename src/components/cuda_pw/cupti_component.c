@@ -3,9 +3,9 @@
 #include <papi_vector.h>
 
 #include "debug_comp.h"
-#include "api_cuda.h"
-#include "common_defs.h"
-#include "cuda_common.h"
+#include "cuda_api_config.h"
+#include "common.h"
+#include "cuda_utils.h"
 #include "cupti_component.h"
 
 #if API_PERFWORKS
@@ -48,7 +48,7 @@ int cupti_init_cuctx_arr(void ** pcuda_context)
     return init_CUcontext_array(pcuda_context);
 }
 
-int cupti_control_create(struct event_name_list_s * event_names, int event_count, int *evt_ids, void ** pcupti_ctl, void **pcu_ctx)
+int cupti_control_create(event_list_t * event_names, int event_count, int *evt_ids, void ** pcupti_ctl, void **pcu_ctx)
 {
 #if API_PERFWORKS
     int res = cupti_profiler_control_create(event_names, event_count, evt_ids, pcupti_ctl, pcu_ctx);

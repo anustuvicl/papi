@@ -1,7 +1,7 @@
 #ifndef __CUPTI_COMPONENT_H__
 #define __CUPTI_COMPONENT_H__
 
-#include "common_defs.h"
+#include "common.h"
 
 int cupti_shutdown(void);
 int cupti_init(const char **disabled_reason);

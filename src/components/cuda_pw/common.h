@@ -2,8 +2,8 @@
   This file contains data structures visible to linux-cuda.c and cupti_profiler.h
 */
 
-#ifndef __COMMON_DEFS_H__
-#define __COMMON_DEFS_H__
+#ifndef __COMMON_H__
+#define __COMMON_H__
 
 #include <papi.h>
 
@@ -19,7 +19,7 @@ typedef struct eventname_id_s {
 } event_rec_t;
 
 typedef struct event_name_list_s {
-    struct eventname_id_s *evts;
+    event_rec_t *evts;
     unsigned int count;
     unsigned int capacity;
     void *htable;
@@ -33,4 +33,4 @@ int find_event_name(event_list_t *evt_table, const char *evt_name, event_rec_t *
 void free_event_name_list(event_list_t *evt_table);
 int tokenize_event_name(const char * name, char * nv_name, int * gpuid);
 
-#endif  // __COMMON_DEFS_H__
+#endif  // __COMMON_H__

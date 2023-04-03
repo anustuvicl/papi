@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "debug_comp.h"
-#include "common_defs.h"
+#include "common.h"
 
 #include "cupti_component.h"
 
@@ -148,8 +148,9 @@ static int cuda_init_private(void)
 
     // Initialize global_event_names array
     res = initialize_dynamic_event_list(&global_event_names);
-    if (res != PAPI_OK)
-        return res;
+    if (res != PAPI_OK) {
+        goto fn_exit;
+    }
 
     _cuda_pw_vector.cmp_info.disabled = PAPI_OK;
     strcpy(_cuda_pw_vector.cmp_info.disabled_reason, "");
@@ -158,32 +159,35 @@ fn_exit:
     return res;
 }
 
-static void check_n_initialize(void)
+static int check_n_initialize(void)
 {
     _papi_hwi_lock(COMPONENT_LOCK);
-
+    int res = PAPI_OK;
     if (_cuda_pw_vector.cmp_info.initialized
         && _cuda_pw_vector.cmp_info.disabled == PAPI_EDELAY_INIT
     ) {
-        cuda_init_private();
+        res = cuda_init_private();
     }
 
     _papi_hwi_unlock(COMPONENT_LOCK);
+    return res;
 }
 
-static int cuda_ntv_enum_events(unsigned int *event_code, int modifier)
+static int cuda_ntv_enum_events(unsigned int __attribute__((unused)) *event_code, int __attribute__((unused)) modifier)
 {
-    check_n_initialize();
 
-    (void) event_code;
-    (void) modifier;
-    return PAPI_ENOEVNT;  // Not implemented
+    int res = check_n_initialize();
+    if (res != PAPI_OK)
+        return PAPI_ENOEVNT;  // Not implemented
+    else
+        return PAPI_OK;
 }
 
 static int cuda_ntv_name_to_code(const char *name, unsigned int *event_code)
 {
-    check_n_initialize();
-    int res;
+    int res = check_n_initialize();
+    if (res != PAPI_OK)
+        return res;
     event_rec_t *evt_rec;
     res = find_event_name(&global_event_names, name, &evt_rec);
     if (res == PAPI_OK) {
@@ -202,7 +206,9 @@ static int cuda_ntv_name_to_code(const char *name, unsigned int *event_code)
 
 static int cuda_ntv_code_to_name(unsigned int event_code, char *name, int len)
 {
-    check_n_initialize();
+    int res = check_n_initialize();
+    if (res != PAPI_OK)
+        return res;
     if (event_code >= global_event_names.count) {
         return PAPI_EINVAL;
     }
@@ -211,37 +217,34 @@ static int cuda_ntv_code_to_name(unsigned int event_code, char *name, int len)
     return PAPI_OK;
 }
 
-static int cuda_ntv_code_to_descr(unsigned int event_code, char *descr, int len)
+static int cuda_ntv_code_to_descr(unsigned int __attribute__((unused)) event_code, char __attribute__((unused)) *descr, int __attribute__((unused)) len)
 {
-    check_n_initialize();
+    int res = check_n_initialize();
+    if (res != PAPI_OK)
+        return res;
     // strcpy(descr, metric_table->metrics[event_code].description);
-    (void) event_code; (void) descr; (void) len;
     return PAPI_OK;
 }
 
-static int cuda_init_thread(hwd_context_t *ctx)
+static int cuda_init_thread(hwd_context_t __attribute__((unused)) *ctx)
 {
-    (void) ctx;
     return PAPI_OK;
 }
 
-static int cuda_shutdown_thread(hwd_context_t *ctx)
+static int cuda_shutdown_thread(hwd_context_t __attribute__((unused)) *ctx)
 {
-    (void) ctx;
     return PAPI_OK;
 }
 
-static int cuda_init_control_state(hwd_control_state_t *ctl)
+static int cuda_init_control_state(hwd_control_state_t __attribute__((unused)) *ctl)
 {
     COMPDBG("Entering.\n");
-    (void) ctl;
     return PAPI_OK;
 }
 
-static int cuda_set_domain(hwd_control_state_t * ctrl, int domain)
+static int cuda_set_domain(hwd_control_state_t __attribute__((unused)) *ctrl, int domain)
 {
     COMPDBG("Entering\n");
-    (void) ctrl;
     if((PAPI_DOM_USER & domain) || (PAPI_DOM_KERNEL & domain) || (PAPI_DOM_OTHER & domain) || (PAPI_DOM_ALL & domain))
         return (PAPI_OK);
     else
@@ -254,8 +257,10 @@ static int cuda_update_control_state(hwd_control_state_t *ctl,
                                      int ntv_count, hwd_context_t *ctx
 ) {
     COMPDBG("Entering with events_count %d.\n", ntv_count);
-    check_n_initialize();
     int i, res;
+    res = check_n_initialize();
+    if (res != PAPI_OK)
+        return res;
     if (ntv_count == 0)
         goto fn_exit;
     struct cuda_ctl *control = (struct cuda_ctl *) ctl;
@@ -329,10 +334,9 @@ static int cuda_start(hwd_context_t *ctx, hwd_control_state_t *ctl)
     return res;
 }
 
-int cuda_stop(hwd_context_t *ctx, hwd_control_state_t *ctl)
+int cuda_stop(hwd_context_t __attribute__((unused)) *ctx, hwd_control_state_t *ctl)
 {
     COMPDBG("Entering.\n");
-    (void) ctx;
     struct cuda_ctl *control = (struct cuda_ctl *) ctl;
     int res;
     res = cupti_stop( &(control->cupti_ctl), &(control->cuctx_arr) );
@@ -343,12 +347,8 @@ fn_exit:
     return res;
 }
 
-static int cuda_read(hwd_context_t *ctx, hwd_control_state_t *ctl, long long **val, int flags)
+static int cuda_read(hwd_context_t __attribute__((unused)) *ctx, hwd_control_state_t *ctl, long long **val, int __attribute__((unused)) flags)
 {
-    // return cuda_profiler_read(ctx, ctl, val, flags);
-    (void) val;
-    (void) flags;
-    (void) ctx;
     struct cuda_ctl * control = (struct cuda_ctl *) ctl;
     int res;
     res = cupti_stop( &(control->cupti_ctl), &(control->cuctx_arr) );
@@ -367,11 +367,8 @@ fn_exit:
     return res;
 }
 
-static int cuda_reset(hwd_context_t *ctx, hwd_control_state_t *ctl)
+static int cuda_reset(hwd_context_t __attribute__((unused)) *ctx, hwd_control_state_t __attribute__((unused)) *ctl)
 {
-    // return cuda_profiler_reset(ctx, ctl);
-    (void) ctx;
-    (void) ctl;
     return PAPI_OK;
 }
 

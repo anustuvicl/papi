@@ -1,10 +1,11 @@
 #include <stdio.h>
 #include <dlfcn.h>
 #include <papi.h>
+#include "papi_memory.h"
 
-#include "cuda_common.h"
+#include "cuda_utils.h"
 
-int get_env_PAPI_CUDA_ROOT(void)
+int get_env_papi_cuda_root(void)
 {
     PAPI_CUDA_ROOT_ENV = getenv("PAPI_CUDA_ROOT");
     if (PAPI_CUDA_ROOT_ENV == NULL) {
@@ -16,15 +17,17 @@ int get_env_PAPI_CUDA_ROOT(void)
 int load_cuda_sym(void)
 {
     int papiErr = PAPI_OK;
-    // char path_lib[PATH_MAX];
-    // int strErr;
-    // strErr = snprintf(path_lib, PATH_MAX-2, "%s/lib64/libcuda.so", PAPI_CUDA_ROOT);
-    // printf("path_lib: %s\n", path_lib);
+    /* These are notes for future reference
+    > char path_lib[PATH_MAX];
+    > int strErr;
+    > strErr = snprintf(path_lib, PATH_MAX-2, "%s/lib64/libcuda.so", PAPI_CUDA_ROOT);
+    > printf("path_lib: %s\n", path_lib);
 
-    // $PAPI_CUDA_ROOT/targets/x86_64-linux/lib/stubs/libcuda.so
+    > $PAPI_CUDA_ROOT/targets/x86_64-linux/lib/stubs/libcuda.so
+    */
     dl1 = dlopen("libcuda.so", RTLD_NOW | RTLD_GLOBAL);
     if (dl1 == NULL) {
-        fprintf(stderr, "ERROR: Loading libcuda.so failed.\n");
+        ERRDBG("Loading libcuda.so failed.\n");
         goto fn_fail;
     }
 
@@ -57,7 +60,7 @@ int load_cudart_sym(void)
     int papiErr = PAPI_OK;
     dl2 = dlopen("libcudart.so", RTLD_NOW | RTLD_GLOBAL);
     if (dl2 == NULL) {
-        fprintf(stderr, "ERROR: Loading libcudart.so failed.\n");
+        ERRDBG("Loading libcudart.so failed.\n");
         goto fn_fail;
     }
 
@@ -82,7 +85,7 @@ int load_cupti_common_sym(void)
     int papiErr = PAPI_OK;
     dl3 = dlopen("libcupti.so", RTLD_NOW | RTLD_GLOBAL);
     if (dl3 == NULL) {
-        fprintf(stderr, "ERROR: Loading libcupti.so failed.\n");
+        ERRDBG("Loading libcupti.so failed.\n");
         goto fn_fail;
     }
 
@@ -150,7 +153,7 @@ int is_mixed_compute_capability(void)
 int init_CUcontext_array(void ** pcuda_context)
 {
     COMPDBG("Entering.\n");
-    CUcontext *cuCtx = (CUcontext *) calloc (get_device_count(), sizeof(CUcontext));
+    CUcontext *cuCtx = (CUcontext *) papi_calloc (get_device_count(), sizeof(CUcontext));
     if (cuCtx == NULL) {
         return PAPI_ENOMEM;
     }

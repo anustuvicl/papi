@@ -1,7 +1,7 @@
 #ifndef __CUDA_PROFILER_H__
 #define __CUDA_PROFILER_H__
 
-#include "common_defs.h"
+#include "common.h"
 
 int cupti_profiler_init(const char ** pdisabled_reason);
 int cupti_profiler_control_create(struct event_name_list_s * all_event_names, int event_count, int *evt_ids, void ** pctl, void **pcu_ctx);

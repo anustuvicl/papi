@@ -1,47 +1,46 @@
 /*
     Load cuda symbols common to perfworks and events API
 */
-#ifndef __CUDA_COMMON_H__
-#define __CUDA_COMMON_H__
+#ifndef __CUDA_UTILS_H__
+#define __CUDA_UTILS_H__
 
 #include <stdio.h>
 #include "debug_comp.h"
-#include "api_cuda.h"
+#include "cuda_api_config.h"
 
 char* PAPI_CUDA_ROOT_ENV;
 
 void *dl1, *dl2, *dl3;
 
-#define DECLARECUDAFUNC(funcname, funcsig) CUresult ( *funcname##Ptr ) funcsig;
-DECLARECUDAFUNC(cuCtxGetCurrent, (CUcontext *));
-DECLARECUDAFUNC(cuCtxSetCurrent, (CUcontext));
-DECLARECUDAFUNC(cuCtxDestroy, (CUcontext));
-DECLARECUDAFUNC(cuCtxCreate, (CUcontext *pctx, unsigned int flags, CUdevice dev));
-DECLARECUDAFUNC(cuCtxGetDevice, (CUdevice *));
-DECLARECUDAFUNC(cuDeviceGet, (CUdevice *, int));
-DECLARECUDAFUNC(cuDeviceGetCount, (int *));
-DECLARECUDAFUNC(cuDeviceGetName, (char *, int, CUdevice));
-DECLARECUDAFUNC(cuDevicePrimaryCtxRetain, (CUcontext *pctx, CUdevice));
-DECLARECUDAFUNC(cuDevicePrimaryCtxRelease, (CUdevice));
-DECLARECUDAFUNC(cuInit, (unsigned int));
-DECLARECUDAFUNC(cuGetErrorString, (CUresult error, const char** pStr));
-DECLARECUDAFUNC(cuCtxPopCurrent, (CUcontext * pctx));
-DECLARECUDAFUNC(cuCtxPushCurrent, (CUcontext pctx));
-DECLARECUDAFUNC(cuCtxSynchronize, ());
-DECLARECUDAFUNC(cuDeviceGetAttribute, (int *, CUdevice_attribute, CUdevice));
+// cuda driver function pointers
+CUresult ( *cuCtxGetCurrentPtr ) (CUcontext *);
+CUresult ( *cuCtxSetCurrentPtr ) (CUcontext);
+CUresult ( *cuCtxDestroyPtr ) (CUcontext);
+CUresult ( *cuCtxCreatePtr ) (CUcontext *pctx, unsigned int flags, CUdevice dev);
+CUresult ( *cuCtxGetDevicePtr ) (CUdevice *);
+CUresult ( *cuDeviceGetPtr ) (CUdevice *, int);
+CUresult ( *cuDeviceGetCountPtr ) (int *);
+CUresult ( *cuDeviceGetNamePtr ) (char *, int, CUdevice);
+CUresult ( *cuDevicePrimaryCtxRetainPtr ) (CUcontext *pctx, CUdevice);
+CUresult ( *cuDevicePrimaryCtxReleasePtr ) (CUdevice);
+CUresult ( *cuInitPtr ) (unsigned int);
+CUresult ( *cuGetErrorStringPtr ) (CUresult error, const char** pStr);
+CUresult ( *cuCtxPopCurrentPtr ) (CUcontext * pctx);
+CUresult ( *cuCtxPushCurrentPtr ) (CUcontext pctx);
+CUresult ( *cuCtxSynchronizePtr ) ();
+CUresult ( *cuDeviceGetAttributePtr ) (int *, CUdevice_attribute, CUdevice);
 
-#define DECLARECUDARTFUNC(funcname, funcsig) cudaError_t ( *funcname##Ptr ) funcsig;
-DECLARECUDARTFUNC(cudaGetDeviceCount, (int *));
-DECLARECUDARTFUNC(cudaGetDevice, (int *));
-DECLARECUDARTFUNC(cudaSetDevice, (int));
-DECLARECUDARTFUNC(cudaGetDeviceProperties, (struct cudaDeviceProp* prop, int  device));
-DECLARECUDARTFUNC(cudaDeviceGetAttribute, (int *value, enum cudaDeviceAttr attr, int device));
-DECLARECUDARTFUNC(cudaFree, (void *));
-DECLARECUDARTFUNC(cudaDriverGetVersion, (int *));
-DECLARECUDARTFUNC(cudaRuntimeGetVersion, (int *));
+// cuda runtime function pointers
+cudaError_t ( *cudaGetDeviceCountPtr ) (int *);
+cudaError_t ( *cudaGetDevicePtr ) (int *);
+cudaError_t ( *cudaSetDevicePtr ) (int);
+cudaError_t ( *cudaGetDevicePropertiesPtr ) (struct cudaDeviceProp* prop, int  device);
+cudaError_t ( *cudaDeviceGetAttributePtr ) (int *value, enum cudaDeviceAttr attr, int device);
+cudaError_t ( *cudaFreePtr ) (void *);
+cudaError_t ( *cudaDriverGetVersionPtr ) (int *);
+cudaError_t ( *cudaRuntimeGetVersionPtr ) (int *);
 
-#define DECLARECUPTIFUNC(funcname, funcsig) CUptiResult ( *funcname##Ptr ) funcsig;
-DECLARECUPTIFUNC(cuptiGetVersion, (uint32_t* ));
+CUptiResult ( *cuptiGetVersionPtr ) (uint32_t* );
 
 #define DLSYM_AND_CHECK( dllib, name ) dlsym( dllib, name );  \
     if (dlerror() != NULL) {  \
@@ -80,7 +79,7 @@ DECLARECUPTIFUNC(cuptiGetVersion, (uint32_t* ));
         }  \
     } while (0);
 
-int get_env_PAPI_CUDA_ROOT(void);
+int get_env_papi_cuda_root(void);
 int load_cuda_sym(void);
 int load_cudart_sym(void);
 int load_cupti_common_sym(void);
@@ -91,4 +90,4 @@ int is_gpu_perfworks(int dev_num);
 int is_mixed_compute_capability(void);
 int init_CUcontext_array(void ** pcuda_context);
 
-#endif /* __CUDA_COMMON_H__ */
+#endif /* __CUDA_UTILS_H__ */
