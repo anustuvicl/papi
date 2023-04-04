@@ -175,7 +175,7 @@ void profileKernels(perDeviceData &d,
             RUNTIME_API_CALL(cudaStreamSynchronize(0));
         }
     PAPI_CALL(PAPI_stop(eventset, d.values));
-    // PAPI_CALL(PAPI_cleanup_eventset(eventset));
+    PAPI_CALL(PAPI_cleanup_eventset(eventset));
 }
 
 void print_measured_values(perDeviceData &d, vector<string> const &metricNames)
@@ -364,6 +364,11 @@ int main(int argc, char * argv[])
     }
     else
     {
+        if ( PAPI_OK != PAPI_thread_init((unsigned long (*)(void)) std::this_thread::get_id) ) {
+            fprintf(stderr, "Error setting thread id function.\n");
+            exit(-1);
+        }
+
         cout << "Running on " << numDevices << " devices, one thread per device." << endl;
 
         // Time creation of the same multiple streams (on multiple devices, if possible)
