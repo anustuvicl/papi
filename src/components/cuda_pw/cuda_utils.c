@@ -17,14 +17,6 @@ int get_env_papi_cuda_root(void)
 int load_cuda_sym(void)
 {
     int papiErr = PAPI_OK;
-    /* These are notes for future reference
-    > char path_lib[PATH_MAX];
-    > int strErr;
-    > strErr = snprintf(path_lib, PATH_MAX-2, "%s/lib64/libcuda.so", PAPI_CUDA_ROOT);
-    > printf("path_lib: %s\n", path_lib);
-
-    > $PAPI_CUDA_ROOT/targets/x86_64-linux/lib/stubs/libcuda.so
-    */
     dl1 = dlopen("libcuda.so", RTLD_NOW | RTLD_GLOBAL);
     if (dl1 == NULL) {
         ERRDBG("Loading libcuda.so failed.\n");
@@ -160,12 +152,3 @@ int init_CUcontext_array(void ** pcuda_context)
     *pcuda_context = (void *) cuCtx;
     return PAPI_OK;
 }
-
-// int get_gpu_info(void) {
-//     COMPDBG("Entering.\n");
-//     int i;
-//     for (i=0; i<get_device_count(); i++) {
-//         CUDART_CALL(cudaGetDevicePropertiesPtr(&_devprop, i));
-//         strcpy(devinfo[i].deviceName, _devprop.name);
-//         }
-// }

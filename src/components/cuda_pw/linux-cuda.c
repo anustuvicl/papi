@@ -210,7 +210,7 @@ static int cuda_ntv_code_to_name(unsigned int event_code, char *name, int len)
     if (res != PAPI_OK)
         return res;
     if (event_code >= global_event_names.count) {
-        return PAPI_EINVAL;
+        return PAPI_ENOEVNT;
     }
 
     strncpy(name, global_event_names.evts[event_code].name, len);

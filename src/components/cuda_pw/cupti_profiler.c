@@ -11,8 +11,8 @@
 
 static int load_cupti_perf_sym(void);
 static int load_nvpw_sym(void);
-static int initialize_cupti_profiler_API(void);
-static int initialize_perfworks_API(void);
+static int initialize_cupti_profiler_api(void);
+static int initialize_perfworks_api(void);
 static int get_chip_name(int dev_num, char* chipName);
 
 static int num_gpus;
@@ -169,7 +169,7 @@ fn_fail:
 
 }
 
-static int initialize_cupti_profiler_API(void)
+static int initialize_cupti_profiler_api(void)
 {
     COMPDBG("Entering.\n");
     CUpti_Profiler_Initialize_Params profilerInitializeParams = {CUpti_Profiler_Initialize_Params_STRUCT_SIZE, NULL };
@@ -179,7 +179,7 @@ static int initialize_cupti_profiler_API(void)
         return PAPI_ESYS;  // or something else?
 }
 
-static int initialize_perfworks_API(void)
+static int initialize_perfworks_api(void)
 {
     COMPDBG("Entering.\n");
     NVPW_InitializeHost_Params perfInitHostParams = { NVPW_InitializeHost_Params_STRUCT_SIZE, NULL };
@@ -250,7 +250,7 @@ fn_exit:
     return res;
 }
 
-static int get_event_names_RMR(struct NVPA_MetricsContext* pMetricsContext, struct cupti_gpu_control_s *ctl)
+static int get_event_names_rmr(struct NVPA_MetricsContext* pMetricsContext, struct cupti_gpu_control_s *ctl)
 {
     int res = PAPI_OK;
 
@@ -418,7 +418,7 @@ static int control_state_validate(struct cupti_profiler_control_s *state)
             goto fn_exit;
         }
 
-        res = get_event_names_RMR(metricsContextCreateParams.pMetricsContext, &(state->ctl[gpu_id]));
+        res = get_event_names_rmr(metricsContextCreateParams.pMetricsContext, &(state->ctl[gpu_id]));
 
         NVPW_MetricsContext_Destroy_Params metricsContextDestroyParams = {
             .structSize = NVPW_MetricsContext_Destroy_Params_STRUCT_SIZE,
@@ -730,7 +730,7 @@ static int begin_profiling(struct cupti_gpu_control_s *ctl, CUcontext cuctx)
     return PAPI_OK;
 }
 
-int end_profiling(struct cupti_gpu_control_s *ctl, CUcontext cuctx)
+static int end_profiling(struct cupti_gpu_control_s *ctl, CUcontext cuctx)
 {
 
     COMPDBG("EndProfiling. dev = %d ctx = %p\n", ctl->gpu_id, cuctx);
@@ -924,8 +924,8 @@ int cupti_profiler_init(const char ** pdisabled_reason)
         *pdisabled_reason = "Mixed compute capability not supported.";
         goto fn_fail;
     }
-    retval = initialize_cupti_profiler_API();
-    retval += initialize_perfworks_API();
+    retval = initialize_cupti_profiler_api();
+    retval += initialize_perfworks_api();
     if (retval != PAPI_OK) {
         *pdisabled_reason = "Unable to initialize CUPTI profiler libraries.";
         goto fn_fail;

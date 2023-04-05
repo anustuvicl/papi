@@ -15,7 +15,7 @@ typedef struct eventname_id_s {
     unsigned int evt_pos;  // index of added event
     int num_dep;
     double value;
-    void * info;  // API specific details
+    void *info;  // API specific details
 } event_rec_t;
 
 typedef struct event_name_list_s {

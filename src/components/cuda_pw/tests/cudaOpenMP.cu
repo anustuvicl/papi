@@ -99,7 +99,6 @@ int main(int argc, char *argv[]) {
   }
   // Create a gpu context for every thread
   for (i=0; i < NUM_THREADS; i++) {
-    RUNTIME_API_CALL(cudaSetDevice(i % num_gpus));
     DRIVER_API_CALL(cuCtxCreate(&(ctx_arr[i]), 0, i % num_gpus));  // "% num_gpus" allows more CPU threads than GPU devices
     DRIVER_API_CALL(cuCtxPopCurrent(&(ctx_arr[i])));
   }
@@ -124,7 +123,7 @@ int main(int argc, char *argv[]) {
     unsigned int cpu_thread_id = omp_get_thread_num();
     unsigned int num_cpu_threads = omp_get_num_threads();
     int gpu_id = cpu_thread_id % num_gpus;
-    RUNTIME_API_CALL(cudaSetDevice(gpu_id));
+
     DRIVER_API_CALL(cuCtxPushCurrent(ctx_arr[cpu_thread_id]));
     printf("CPU thread %d (of %d) uses CUDA device %d with context %p @ eventset %d\n", cpu_thread_id, num_cpu_threads, gpu_id, ctx_arr[cpu_thread_id], EventSet);
     char tmpEventName[64];

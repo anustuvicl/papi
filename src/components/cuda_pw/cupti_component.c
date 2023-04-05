@@ -8,9 +8,9 @@
 #include "cuda_utils.h"
 #include "cupti_component.h"
 
-#if API_PERFWORKS
+#if defined API_PERFWORKS
 #include "cupti_profiler.h"
-#elif API_EVENTS
+#elif defined API_EVENTS
 #include "cupti_events.h"
 #endif
 
@@ -24,9 +24,9 @@ int cupti_shutdown(void)
 int cupti_init(const char **pdisabled_reason)
 {
     int retval;
-#if API_PERFWORKS
+#if defined API_PERFWORKS
     retval = cupti_profiler_init(pdisabled_reason);
-#elif API_EVENTS
+#elif defined API_EVENTS
     retval = cupti_events_init(pdisabled_reason);
 #else
     *pdisabled_reason = "CUDA not found.";
@@ -50,7 +50,7 @@ int cupti_init_cuctx_arr(void ** pcuda_context)
 
 int cupti_control_create(event_list_t * event_names, int event_count, int *evt_ids, void ** pcupti_ctl, void **pcu_ctx)
 {
-#if API_PERFWORKS
+#if defined API_PERFWORKS
     int res = cupti_profiler_control_create(event_names, event_count, evt_ids, pcupti_ctl, pcu_ctx);
     return res;
 #endif
@@ -58,7 +58,7 @@ int cupti_control_create(event_list_t * event_names, int event_count, int *evt_i
 
 int cupti_control_destroy(void **pcupti_ctl)
 {
-#if API_PERFWORKS
+#if defined API_PERFWORKS
     int res = cupti_profiler_control_destroy(pcupti_ctl);
     return res;
 #endif
@@ -66,9 +66,9 @@ int cupti_control_destroy(void **pcupti_ctl)
 
 int cupti_start(void *pcupti_ctl, void **pcu_ctx)
 {
-#if API_PERFWORKS
+#if defined API_PERFWORKS
     return cupti_profiler_start(pcupti_ctl, pcu_ctx);
-#elif API_EVENTS
+#elif defined API_EVENTS
     //
 #endif
     (void)pcupti_ctl;
@@ -76,9 +76,9 @@ int cupti_start(void *pcupti_ctl, void **pcu_ctx)
 }
 
 int cupti_stop(void *pcupti_ctl, void **pcu_ctx){  // NOTE: void **pcupti_ctl ??
-#if API_PERFWORKS
+#if defined API_PERFWORKS
     return cupti_profiler_stop(pcupti_ctl, pcu_ctx);
-#elif API_EVENTS
+#elif defined API_EVENTS
     //
 #endif
     (void) pcupti_ctl;
@@ -87,7 +87,7 @@ int cupti_stop(void *pcupti_ctl, void **pcu_ctx){  // NOTE: void **pcupti_ctl ??
 
 int cupti_control_read(void *pcupti_ctl, long long *values)
 {
-#if API_PERFWORKS
+#if defined API_PERFWORKS
     return cupti_profiler_control_read(pcupti_ctl, values);
 #endif
 }

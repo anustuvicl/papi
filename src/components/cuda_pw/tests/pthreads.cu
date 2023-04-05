@@ -60,10 +60,9 @@ void * thread_gpu(void * idx)
     long long values[NUM_METRICS];
     PAPI_CALL(PAPI_create_eventset(&EventSet));
 
-    // RUNTIME_API_CALL(cudaSetDevice(gpuid));
     DRIVER_API_CALL(cuCtxSetCurrent(cuCtx[tid]));
     fprintf(stderr, "This is idx %d thread %lu - using GPU %d context %p!\n",
-           tid, gettid, gpuid, cuCtx[tid]);
+            tid, gettid, gpuid, cuCtx[tid]);
 
     char tmpEventName[64];
     for (i=0; i<NUM_METRICS; i++) {
@@ -114,8 +113,8 @@ int main()
         rc = pthread_create(&tidarr[i], NULL, thread_gpu, &(tid[i]));
         if(rc)
         {
-             fprintf(stderr, "\n ERROR: return code from pthread_create is %d \n", rc);
-             exit(1);
+            fprintf(stderr, "\n ERROR: return code from pthread_create is %d \n", rc);
+            exit(1);
         }
         fprintf(stderr, "\n Main thread %lu. Created new thread (%lu) in iteration %d ...\n",
                 (unsigned long)pthread_self(), (unsigned long)tidarr[i], i);
