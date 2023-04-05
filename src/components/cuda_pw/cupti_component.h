@@ -11,5 +11,5 @@ int cupti_control_destroy(void **pcupti_ctl);
 int cupti_start(void *pcupti_ctl, void **pcu_ctx);
 int cupti_stop(void *pcupti_ctl, void **pcu_ctx);
 int cupti_control_read(void *pcupti_ctl, long long *values);
-
+int cupti_enumerate_all_events(event_list_t *all_evt_names);
 #endif // __CUPTI_COMPONENT_H__

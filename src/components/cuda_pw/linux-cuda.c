@@ -178,9 +178,34 @@ static int cuda_ntv_enum_events(unsigned int __attribute__((unused)) *event_code
 
     int res = check_n_initialize();
     if (res != PAPI_OK)
-        return PAPI_ENOEVNT;  // Not implemented
-    else
-        return PAPI_OK;
+        goto fn_exit;
+
+    res = cupti_enumerate_all_events(&global_event_names);
+    if (res != PAPI_OK)
+        goto fn_exit;
+
+    _cuda_pw_vector.cmp_info.num_cntrs = global_event_names.count;
+    _cuda_pw_vector.cmp_info.num_native_events = global_event_names.count;
+    switch (modifier) {
+        case PAPI_ENUM_FIRST:
+            *event_code = 0;
+            res = PAPI_OK;
+            break;
+        case PAPI_ENUM_EVENTS:
+            if (global_event_names.count == 0) {
+                res = PAPI_ENOEVNT;
+            } else if (*event_code < global_event_names.count -1) {
+                *event_code = *event_code + 1;
+                res = PAPI_OK;
+            } else {
+                res = PAPI_ENOEVNT;
+            }
+            break;
+        default:
+            res = PAPI_EINVAL;
+    }
+fn_exit:
+    return res;
 }
 
 static int cuda_ntv_name_to_code(const char *name, unsigned int *event_code)

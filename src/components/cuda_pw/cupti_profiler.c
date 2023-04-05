@@ -887,6 +887,117 @@ fn_exit:
     return res;
 }
 
+// List metrics API
+typedef struct list_metrics_s {
+    char chip_name[32];
+    NVPW_CUDA_MetricsContext_Create_Params metricsContextCreateParams;
+    int num_metrics;
+    event_list_t *nv_metrics;
+} list_metrics_t;
+
+static list_metrics_t *avail_events;
+
+static int find_same_chipname(int gpu_id)
+{
+    int i;
+    for (i=0; i<gpu_id; i++) {
+        if (!strcmp(avail_events[gpu_id].chip_name, avail_events[i].chip_name)) {
+            return i;
+        }
+    }
+    return -1;  // indicates not found
+}
+
+static int init_all_metrics()
+{
+    int gpu_id, res;
+    avail_events = (list_metrics_t *) papi_calloc(num_gpus, sizeof(list_metrics_t));
+    if (avail_events == NULL)
+        return PAPI_ENOMEM;
+    for (gpu_id=0; gpu_id<num_gpus; gpu_id++) {
+        res = get_chip_name(gpu_id, avail_events[gpu_id].chip_name);
+    }
+    return PAPI_OK;
+}
+
+int cupti_profiler_enumerate_all_metric_names(event_list_t *all_evt_names)
+{
+    int gpu_id, i, found, listsubmetrics=1, res;
+    if (avail_events[0].nv_metrics != NULL)  // Already eumerated for 1st device? Then exit...
+        goto fn_exit;
+    STOPWATCH;
+    TICK;
+    for (gpu_id=0; gpu_id<num_gpus; gpu_id++) {
+        LOGDBG("Getting metric names for gpu %d\n", gpu_id);
+        found = find_same_chipname(gpu_id);
+        if (found > -1) {
+            avail_events[gpu_id].num_metrics = avail_events[found].num_metrics;
+            avail_events[gpu_id].nv_metrics = avail_events[found].nv_metrics;
+            continue;
+        }
+        // If same chip_name not found, get all the details for this gpu
+
+        avail_events[gpu_id].metricsContextCreateParams = (NVPW_CUDA_MetricsContext_Create_Params) {
+            .structSize = NVPW_CUDA_MetricsContext_Create_Params_STRUCT_SIZE,
+            .pPriv = NULL,
+            .pChipName = avail_events[gpu_id].chip_name,
+        };
+        NVPW_CALL(NVPW_CUDA_MetricsContext_CreatePtr(&(avail_events[gpu_id].metricsContextCreateParams)),
+            return PAPI_ENOSUPP);
+
+        NVPW_MetricsContext_GetMetricNames_Begin_Params getMetricNameBeginParams = {
+            .structSize = NVPW_MetricsContext_GetMetricNames_Begin_Params_STRUCT_SIZE,
+            .pPriv = NULL,
+            .pMetricsContext = avail_events[gpu_id].metricsContextCreateParams.pMetricsContext,
+            .hidePeakSubMetrics = !listsubmetrics,
+            .hidePerCycleSubMetrics = !listsubmetrics,
+            .hidePctOfPeakSubMetrics = !listsubmetrics,
+        };
+        NVPW_CALL(NVPW_MetricsContext_GetMetricNames_BeginPtr(&getMetricNameBeginParams), return PAPI_ENOSUPP);
+
+        avail_events[gpu_id].num_metrics = getMetricNameBeginParams.numMetrics;
+        avail_events[gpu_id].nv_metrics = (event_list_t *) malloc(sizeof(event_list_t));
+        if (avail_events[gpu_id].nv_metrics == NULL) {
+            return PAPI_ENOMEM;
+        }
+        res = initialize_dynamic_event_list_size(avail_events[gpu_id].nv_metrics, avail_events[gpu_id].num_metrics);
+        for (i=0; i<avail_events[gpu_id].num_metrics; i++) {
+            res = insert_event_record(avail_events[gpu_id].nv_metrics, getMetricNameBeginParams.ppMetricNames[i], i, 0);
+            // res = get_metric_details(gpu_id, avail_events[gpu_id].nv_metrics->evts[i].name,
+                                    //  avail_events[gpu_id].nv_metrics->evts[i].desc, &num_dep);
+
+        }
+
+        NVPW_MetricsContext_GetMetricNames_End_Params getMetricNameEndParams = {
+            .structSize = NVPW_MetricsContext_GetMetricNames_End_Params_STRUCT_SIZE,
+            .pPriv = NULL,
+            .pMetricsContext = avail_events[gpu_id].metricsContextCreateParams.pMetricsContext,
+        };
+        NVPW_CALL(NVPW_MetricsContext_GetMetricNames_EndPtr((NVPW_MetricsContext_GetMetricNames_End_Params *) &getMetricNameEndParams), return PAPI_ENOSUPP);
+
+    }
+    TOCK;
+    TIMEDBG("Time to get all metric names =");
+    TICK;
+    char evt_name[PAPI_2MAX_STR_LEN];
+    event_rec_t *find=NULL;
+    for (gpu_id=0; gpu_id<num_gpus; gpu_id++) {
+        for (i=0; i<avail_events[gpu_id].num_metrics; i++) {
+            snprintf(evt_name, PAPI_2MAX_STR_LEN, "%s:device=%d", avail_events[gpu_id].nv_metrics->evts[i].name, gpu_id);
+            if (find_event_name(all_evt_names, evt_name, &find) == PAPI_ENOEVNT) {
+                res = insert_event_record(all_evt_names, evt_name, i, 0);
+            }
+            // LOGDBG("Name:\t\t%s\nDescription:\t%s\n\n",
+            //    all_evt_names->evts[all_evt_names->count-1].name, avail_events[gpu_id].nv_metrics->evts[i].desc);
+        }
+    }
+    TOCK;
+    TIMEDBG("Time to transfer all metric names to component =");
+    LOGDBG("Total metric names for %d gpus = %d\n", num_gpus, all_evt_names->count);
+fn_exit:
+    return PAPI_OK;
+}
+
 // CUPTI Profiler component API functions
 int cupti_profiler_init(const char ** pdisabled_reason)
 {
@@ -930,6 +1041,9 @@ int cupti_profiler_init(const char ** pdisabled_reason)
         *pdisabled_reason = "Unable to initialize CUPTI profiler libraries.";
         goto fn_fail;
     }
+    retval = init_all_metrics();
+    if (retval != PAPI_OK)
+        goto fn_fail;
     return PAPI_OK;
 fn_fail:
     return PAPI_ECMP;
