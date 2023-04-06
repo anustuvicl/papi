@@ -16,9 +16,11 @@
 
 extern papi_vector_t _cuda_pw_vector;
 
-int cupti_shutdown(void)
+void cupti_shutdown(void)
 {
-    return PAPI_OK;
+#if defined API_PERFWORKS
+    cupti_profiler_shutdown();
+#endif
 }
 
 int cupti_init(const char **pdisabled_reason)
@@ -98,5 +100,12 @@ int cupti_enumerate_all_events(event_list_t *all_evt_names)
 {
 #if defined API_PERFWORKS
     return cupti_profiler_enumerate_all_metric_names(all_evt_names);
+#endif
+}
+
+int cupti_get_event_description(char *evt_name, char *descr)
+{
+#if defined API_PERFWORKS
+    return cupti_profiler_get_event_description(evt_name, descr);
 #endif
 }

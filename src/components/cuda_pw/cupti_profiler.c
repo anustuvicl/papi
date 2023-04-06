@@ -27,7 +27,6 @@ NVPA_Status ( *NVPW_MetricsContext_GetMetricProperties_BeginPtr ) (NVPW_MetricsC
 NVPA_Status ( *NVPW_MetricsContext_GetMetricProperties_EndPtr ) (NVPW_MetricsContext_GetMetricProperties_End_Params* p);
 NVPA_Status ( *NVPW_CUDA_RawMetricsConfig_CreatePtr ) (NVPW_CUDA_RawMetricsConfig_Create_Params*);
 
-// NVPA_Status ( *NVPA_RawMetricsConfig_CreatePtr ) (NVPA_RawMetricsConfigOptions*, NVPA_RawMetricsConfig**));
 NVPA_Status ( *NVPW_RawMetricsConfig_DestroyPtr ) (NVPW_RawMetricsConfig_Destroy_Params* params);
 NVPA_Status ( *NVPW_RawMetricsConfig_BeginPassGroupPtr ) (NVPW_RawMetricsConfig_BeginPassGroup_Params* params);
 NVPA_Status ( *NVPW_RawMetricsConfig_EndPassGroupPtr ) (NVPW_RawMetricsConfig_EndPassGroup_Params* params);
@@ -998,6 +997,87 @@ fn_exit:
     return PAPI_OK;
 }
 
+static int retrieve_metric_details(int gpu_id, const char *nv_name, char *description, int *numDep)
+{
+    int num_dep;
+    NVPA_Status nvpa_err;
+    NVPW_MetricsContext_GetMetricProperties_Begin_Params getMetricPropertiesBeginParams = {
+        .structSize = NVPW_MetricsContext_GetMetricProperties_Begin_Params_STRUCT_SIZE,
+        .pPriv = NULL,
+        .pMetricsContext = avail_events[gpu_id].metricsContextCreateParams.pMetricsContext,
+        .pMetricName = nv_name,
+    };
+    nvpa_err = NVPW_MetricsContext_GetMetricProperties_BeginPtr(&getMetricPropertiesBeginParams);
+
+    if (nvpa_err == NVPA_STATUS_SUCCESS) {
+        for (num_dep=0; getMetricPropertiesBeginParams.ppRawMetricDependencies[num_dep] != NULL; num_dep++);
+        snprintf(description, PAPI_2MAX_STR_LEN, "%s. Units=%s Numdep=%d",
+                    getMetricPropertiesBeginParams.pDescription,
+                    getMetricPropertiesBeginParams.pDimUnits, num_dep);
+        *numDep = num_dep;
+        NVPW_MetricsContext_GetMetricProperties_End_Params getMetricPropertiesEndParams = {
+            .structSize = NVPW_MetricsContext_GetMetricProperties_End_Params_STRUCT_SIZE,
+            .pPriv = NULL,
+            .pMetricsContext = avail_events[gpu_id].metricsContextCreateParams.pMetricsContext,
+        };
+        NVPW_CALL(NVPW_MetricsContext_GetMetricProperties_EndPtr(&getMetricPropertiesEndParams), return PAPI_ENOSUPP);
+        return PAPI_OK;
+    }
+    else {  // For certain metric names CUPTI gets internal error. Report bug to NV?
+        strcpy(description, "Could not get description.");
+        return PAPI_EINVAL;
+    }
+
+}
+
+int cupti_profiler_get_event_description(const char *evt_name, char *description)
+{
+    int res, numdep, gpu_id;
+    char nv_name[PAPI_MAX_STR_LEN];
+    event_rec_t *evt_rec=NULL;
+    res = tokenize_event_name(evt_name, nv_name, &gpu_id);
+    if (res != PAPI_OK)
+        goto fn_exit;
+    res = find_event_name(avail_events[gpu_id].nv_metrics, nv_name, &evt_rec);
+    if (res != PAPI_OK) {
+        ERRDBG("Event name not found in avail_events array.\n");
+        goto fn_exit;
+    }
+    char *desc = evt_rec->desc;
+    if (desc[0] == '\0') {
+        res = retrieve_metric_details(gpu_id, nv_name, desc, &numdep);
+    }
+    strcpy(description, desc);
+
+fn_exit:
+    return res;
+}
+
+static int free_all_enumerated_metrics()
+{
+    int gpu_id, found;
+    NVPW_MetricsContext_Destroy_Params metricsContextDestroyParams;
+    for (gpu_id=0; gpu_id<num_gpus; gpu_id++) {
+        found = find_same_chipname(gpu_id);
+        if (found > -1) {
+            avail_events[gpu_id].num_metrics = 0;
+            avail_events[gpu_id].nv_metrics = NULL;
+            continue;
+        }
+        if (avail_events[gpu_id].metricsContextCreateParams.pMetricsContext) {
+            metricsContextDestroyParams = (NVPW_MetricsContext_Destroy_Params) {
+                .structSize = NVPW_MetricsContext_Destroy_Params_STRUCT_SIZE,
+                .pPriv = NULL,
+                .pMetricsContext = avail_events[gpu_id].metricsContextCreateParams.pMetricsContext,
+            };
+            NVPW_CALL(NVPW_MetricsContext_DestroyPtr(&metricsContextDestroyParams), return PAPI_ENOSUPP);
+        }
+        if (avail_events[gpu_id].nv_metrics)
+            free_event_name_list(avail_events[gpu_id].nv_metrics);
+    }
+    free(avail_events);
+}
+
 // CUPTI Profiler component API functions
 int cupti_profiler_init(const char ** pdisabled_reason)
 {
@@ -1227,4 +1307,9 @@ int cupti_profiler_control_read(void **pctl, long long *values)
     }
     state->read_count++;
     return res;
+}
+
+void cupti_profiler_shutdown(void)
+{
+    free_all_enumerated_metrics();
 }

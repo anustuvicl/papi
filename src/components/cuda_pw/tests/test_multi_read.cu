@@ -90,5 +90,6 @@ int main()
     for (i=0; i<NUM_METRICS; i++) {
         printf("%s\t\t\t%lld\t\t%lld\n", test_metrics[i], values_multi_read[i], values_single_read[i]);
     }
+    PAPI_shutdown();
     return 0;
 }

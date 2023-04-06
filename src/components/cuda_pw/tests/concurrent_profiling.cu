@@ -425,6 +425,6 @@ int main(int argc, char * argv[])
         // PrintMetricValues(deviceData[i].config.chipName, deviceData[i].counterDataImage, metricNames);
         print_measured_values(deviceData[i], metricNames);
     }
-
+    PAPI_shutdown();
     return 0;
 }

@@ -95,5 +95,6 @@ int main() {
     else
         test_pass(__FILE__);
 
+    PAPI_shutdown();
     return 0;
 }

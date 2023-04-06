@@ -157,5 +157,6 @@ int main(int argc, char *argv[]) {
     printf("%s\n", cudaGetErrorString(cudaGetLastError()));
 
   omp_destroy_lock(&lock);
+  PAPI_shutdown();
   return 0;
 }

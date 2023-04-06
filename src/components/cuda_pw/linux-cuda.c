@@ -131,8 +131,8 @@ static int cuda_shutdown_component(void)
 
     _cuda_pw_vector.cmp_info.initialized = 0;
 
-    // res = cupti_shutdown();
-    // Reverse of private init.
+    cupti_shutdown();
+    // todo: Reverse of private init.
     return res;
 }
 
@@ -242,13 +242,22 @@ static int cuda_ntv_code_to_name(unsigned int event_code, char *name, int len)
     return PAPI_OK;
 }
 
-static int cuda_ntv_code_to_descr(unsigned int __attribute__((unused)) event_code, char __attribute__((unused)) *descr, int __attribute__((unused)) len)
+static int cuda_ntv_code_to_descr(unsigned int event_code, char *descr, int __attribute__((unused)) len)
 {
-    int res = check_n_initialize();
+    char evt_name[PAPI_2MAX_STR_LEN];
+    int res;
+    res = check_n_initialize();
     if (res != PAPI_OK)
-        return res;
-    // strcpy(descr, metric_table->metrics[event_code].description);
-    return PAPI_OK;
+        goto fn_exit;
+    res = cupti_enumerate_all_events(&global_event_names);
+    if (res != PAPI_OK)
+        goto fn_exit;
+    res = cuda_ntv_code_to_name(event_code, evt_name, PAPI_2MAX_STR_LEN);
+    if (res != PAPI_OK)
+        goto fn_exit;
+    res = cupti_get_event_description(evt_name, descr);
+fn_exit:
+    return res;
 }
 
 static int cuda_init_thread(hwd_context_t __attribute__((unused)) *ctx)
