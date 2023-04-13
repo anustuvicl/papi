@@ -35,6 +35,11 @@ static int reallocate_array(event_list_t *evt_table)
         ERRDBG("Failed to expand event_table array.\n");
         return PAPI_ENOMEM;
     }
+    // Rehash all the table entries
+    int i;
+    for (i=0; i<evt_table->count; i++) {
+        htable_insert(evt_table->htable, evt_table->evts[i].name, &(evt_table->evts[i]));
+    }
     return PAPI_OK;
 }
 

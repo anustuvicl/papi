@@ -237,6 +237,10 @@ static int add_events_per_gpu(struct event_name_list_s * event_names, int event_
         res = tokenize_event_name(event_names->evts[evt_ids[i]].name, (char*) &nvName, &gpu_id);
         if (res != PAPI_OK)
             goto fn_exit;
+        if (gpu_id < 0 || gpu_id > num_gpus) {
+            res = PAPI_EINVAL;
+            goto fn_exit;
+        }
         insert_event_record(&(state->ctl[gpu_id].event_names),
                             event_names->evts[evt_ids[i]].name,
                             event_names->evts[evt_ids[i]].evt_code,
@@ -280,7 +284,7 @@ static int get_event_names_rmr(struct NVPA_MetricsContext* pMetricsContext, stru
         if (res != NVPA_STATUS_SUCCESS ||
             getMetricPropertiesBeginParams.ppRawMetricDependencies == NULL) {
                 ERRDBG("Please check event name %s\n", ctl->event_names.evts[i].name);
-                res = PAPI_EINVAL;
+                res = PAPI_ENOEVNT;
                 goto fn_exit;
         }
 
@@ -426,6 +430,9 @@ static int control_state_validate(struct cupti_profiler_control_s *state)
         };
         NVPW_CALL(NVPW_MetricsContext_DestroyPtr(&metricsContextDestroyParams), return PAPI_ENOSUPP);
 
+        if (res != PAPI_OK) {
+            goto fn_exit;
+        }
         NVPW_CUDA_RawMetricsConfig_Create_Params nvpw_metricsConfigCreateParams = {
             .structSize = NVPW_CUDA_RawMetricsConfig_Create_Params_STRUCT_SIZE,
             .pPriv = NULL,
@@ -961,10 +968,9 @@ int cupti_profiler_enumerate_all_metric_names(event_list_t *all_evt_names)
         }
         res = initialize_dynamic_event_list_size(avail_events[gpu_id].nv_metrics, avail_events[gpu_id].num_metrics);
         for (i=0; i<avail_events[gpu_id].num_metrics; i++) {
-            res = insert_event_record(avail_events[gpu_id].nv_metrics, getMetricNameBeginParams.ppMetricNames[i], i, 0);
-            // res = get_metric_details(gpu_id, avail_events[gpu_id].nv_metrics->evts[i].name,
-                                    //  avail_events[gpu_id].nv_metrics->evts[i].desc, &num_dep);
-
+            res = insert_event_record(avail_events[gpu_id].nv_metrics,
+                                      getMetricNameBeginParams.ppMetricNames[i],
+                                      i, 0);
         }
 
         NVPW_MetricsContext_GetMetricNames_End_Params getMetricNameEndParams = {
@@ -1053,7 +1059,7 @@ fn_exit:
     return res;
 }
 
-static int free_all_enumerated_metrics()
+static void free_all_enumerated_metrics()
 {
     int gpu_id, found;
     NVPW_MetricsContext_Destroy_Params metricsContextDestroyParams;
@@ -1205,8 +1211,6 @@ int cupti_profiler_start(void **pctl, void **pcu_ctx)
     int gpu_id;
     char chip_name[32];
     int res = PAPI_OK;
-    // int userDevice;
-    // res = cudaGetDevicePtr(&userDevice);
     for (gpu_id=0; gpu_id<num_gpus; gpu_id++)
     {
         ctl = &(state->ctl[gpu_id]);
@@ -1226,7 +1230,6 @@ int cupti_profiler_start(void **pctl, void **pcu_ctx)
                                ctl->counterDataImage.size);
         res = begin_profiling(ctl, cu_ctx[gpu_id]);
     }
-    // res = cudaSetDevicePtr(userDevice);
     return PAPI_OK;
 fn_fail:
     return PAPI_ECMP;
@@ -1240,15 +1243,12 @@ int cupti_profiler_stop(void **pctl, void **pcu_ctx)
     CUcontext * cu_ctx = (CUcontext *) (*pcu_ctx);
     int gpu_id;
     int res = PAPI_OK;
-    // int userDevice;
-    // res = cudaGetDevicePtr(&userDevice);
     for (gpu_id=0; gpu_id<num_gpus; gpu_id++) {
         ctl = &(state->ctl[gpu_id]);
         if (ctl->event_names.count == 0)
             continue;
         res = end_profiling(ctl, cu_ctx[gpu_id]);
     }
-    // res = cudaSetDevicePtr(userDevice);
     return res;
 }
 

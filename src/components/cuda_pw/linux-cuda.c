@@ -173,9 +173,8 @@ static int check_n_initialize(void)
     return res;
 }
 
-static int cuda_ntv_enum_events(unsigned int __attribute__((unused)) *event_code, int __attribute__((unused)) modifier)
+static int cuda_ntv_enum_events(unsigned int *event_code, int modifier)
 {
-
     int res = check_n_initialize();
     if (res != PAPI_OK)
         goto fn_exit;
