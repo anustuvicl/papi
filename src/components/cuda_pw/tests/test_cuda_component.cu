@@ -22,7 +22,11 @@ char const *EventNames[] = {
 
 int main()
 {
-    int retval = PAPI_library_init( PAPI_VER_CURRENT );
+    int retval;
+
+    cuInit(0);
+
+    retval = PAPI_library_init( PAPI_VER_CURRENT );
     if( retval != PAPI_VER_CURRENT ) {
         fprintf( stderr, "Please recompile this test program. Installed PAPI has been updated.\n" );
         exit(-1);

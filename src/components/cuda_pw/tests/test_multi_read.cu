@@ -73,6 +73,8 @@ void single_read(long long *values)
 int main()
 {
     int res;
+    res = cuInit(0);
+
     res = PAPI_library_init(PAPI_VER_CURRENT);
 
     res = PAPI_get_component_index(COMP_NAME);
@@ -80,7 +82,8 @@ int main()
         fprintf(stderr, "PAPI not configured with '" COMP_NAME "' component!");
         exit(-1);
     }
-    long long values_multi_read[NUM_METRICS], values_single_read[NUM_METRICS];
+    long long values_multi_read[NUM_METRICS];
+    long long values_single_read[NUM_METRICS];
 
     multi_read(values_multi_read);
     single_read(values_single_read);

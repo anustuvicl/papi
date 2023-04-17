@@ -4,7 +4,10 @@ include ../../Makefile_comp_tests.target
 PAPI_CUDA_ROOT ?= /opt/cuda
 PAPI_CUPTI_ROOT ?= $(PAPI_CUDA_ROOT)/extras/CUPTI
 
-TESTS = HelloWorld_prof simpleMultiGPU_CUPTI11 pthreads cudaOpenMP test_cuda_component test_multi_read concurrent_profiling
+TESTS = HelloWorld_prof simpleMultiGPU_CUPTI11 \
+		pthreads cudaOpenMP test_cuda_component concurrent_profiling \
+		test_multi_read test_multipass_event_fail
+
 cuda_pw_tests: $(TESTS)
 
 NVCC = $(PAPI_CUDA_ROOT)/bin/nvcc

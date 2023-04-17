@@ -36,7 +36,7 @@ static int reallocate_array(event_list_t *evt_table)
         return PAPI_ENOMEM;
     }
     // Rehash all the table entries
-    int i;
+    unsigned int i;
     for (i=0; i<evt_table->count; i++) {
         htable_insert(evt_table->htable, evt_table->evts[i].name, &(evt_table->evts[i]));
     }
