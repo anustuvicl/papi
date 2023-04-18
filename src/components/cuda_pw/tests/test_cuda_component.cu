@@ -62,9 +62,12 @@ int main()
     }
 
     retval = PAPI_start(eventset);
-    
+
+    // Kernel launches here
+
     long long values[NUM_EVENTS*NUM_GPUS];
     retval = PAPI_stop(eventset, values);
+
     PAPI_shutdown();
     return 0;
 }

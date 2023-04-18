@@ -19,7 +19,15 @@ void multi_read(long long *values)
     int res, i, j;
     CUcontext ctx;
     res = PAPI_create_eventset(&EventSet);
+    if (res != PAPI_OK) {
+        fprintf(stderr, "Failed to create eventset.\n");
+    }
+
     res = cuCtxCreate(&ctx, 0, 0);
+    if (res != CUDA_SUCCESS) {
+        fprintf(stderr, "cuda error: failed to create cuda context.\n");
+    }
+
     for (i=0; i<NUM_METRICS; i++) {
         res = PAPI_add_named_event(EventSet, test_metrics[i]);
         if (res != PAPI_OK) {
@@ -28,18 +36,32 @@ void multi_read(long long *values)
     }
 
     res = PAPI_start(EventSet);
-
+    if (res != PAPI_OK) {
+        fprintf(stderr, "PAPI_start error.\n");
+    }
     for (i=0; i<10; i++) {
         VectorAddSubtract(50000*(i+1));
         res = PAPI_read(EventSet, values);
+        if (res != PAPI_OK) {
+            fprintf(stderr, "PAPI_read error.\n");
+        }
         printf("Measured values iter %d\n", i);
         for (j=0; j<NUM_METRICS; j++) {
             printf("%s\t\t%lld\n", test_metrics[j], values[j]);
         }
     }
     res = PAPI_stop(EventSet, values);
+    if (res != PAPI_OK) {
+        fprintf(stderr, "PAPI_stop error.\n");
+    }
     res = PAPI_cleanup_eventset(EventSet);
+    if (res != PAPI_OK) {
+        fprintf(stderr, "PAPI_cleanup_eventset error.\n");
+    }
     res = cuCtxDestroy(ctx);
+    if (res != CUDA_SUCCESS) {
+        fprintf(stderr, "cude error: failed to destroy context.\n");
+    }
 }
 
 void single_read(long long *values)
@@ -48,7 +70,13 @@ void single_read(long long *values)
     int res, i, j;
     CUcontext ctx;
     res = PAPI_create_eventset(&EventSet);
+    if (res != PAPI_OK) {
+        fprintf(stderr, "PAPI_create_eventset error.\n");
+    }
     res = cuCtxCreate(&ctx, 0, 0);
+    if (res != CUDA_SUCCESS) {
+        fprintf(stderr, "cuda error: failed to create cuda context.\n");
+    }
     for (i=0; i<NUM_METRICS; i++) {
         res = PAPI_add_named_event(EventSet, test_metrics[i]);
         if (res != PAPI_OK) {
@@ -57,17 +85,28 @@ void single_read(long long *values)
     }
 
     res = PAPI_start(EventSet);
-
+    if (res != PAPI_OK) {
+        fprintf(stderr, "PAPI_start error.\n");
+    }
     for (i=0; i<10; i++) {
         VectorAddSubtract(50000*(i+1));
     }
     res = PAPI_stop(EventSet, values);
+    if (res != PAPI_OK) {
+        fprintf(stderr, "PAPI_stop error.\n");
+    }
     printf("Measured values from single read\n");
     for (j=0; j<NUM_METRICS; j++) {
         printf("%s\t\t%lld\n", test_metrics[j], values[j]);
     }
     res = PAPI_cleanup_eventset(EventSet);
+    if (res != PAPI_OK) {
+        fprintf(stderr, "PAPI_cleanup_eventset error.\n");
+    }
     res = cuCtxDestroy(ctx);
+    if (res != CUDA_SUCCESS) {
+        fprintf(stderr, "cuda error: failed to destroy cuda context.\n");
+    }
 }
 
 int main()
@@ -76,7 +115,9 @@ int main()
     res = cuInit(0);
 
     res = PAPI_library_init(PAPI_VER_CURRENT);
-
+    if (res != PAPI_VER_CURRENT) {
+        fprintf(stderr, "Failed to initialize PAPI.\n");
+    }
     res = PAPI_get_component_index(COMP_NAME);
     if (res < 0) {
         fprintf(stderr, "PAPI not configured with '" COMP_NAME "' component!");

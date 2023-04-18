@@ -1169,10 +1169,12 @@ int cupti_profiler_control_create(struct event_name_list_s * all_event_names, in
     if (cu_ctx[gpu_id] == NULL) {
         if (temp != NULL) {
             LOGDBG("Registering device = %d with ctx = %p.\n", gpu_id, temp);
-            res = cuCtxGetCurrentPtr(&cu_ctx[gpu_id]);
+            CUDA_CALL(cuCtxGetCurrentPtr(&cu_ctx[gpu_id]), return PAPI_ENOSUPP);
         }
         else {
-            ERRDBG("Got NULL current cuda context for device %d.\n", gpu_id);
+            CUDART_CALL(cudaFreePtr(NULL), return PAPI_ENOSUPP);
+            CUDA_CALL(cuCtxGetCurrentPtr(&cu_ctx[gpu_id]), return PAPI_ENOSUPP);
+            LOGDBG("Using primary device context %p for device %d.\n", cu_ctx[gpu_id], gpu_id);
         }
     }
     else if (cu_ctx[gpu_id] != temp) {  // If context has changed keep the first seen one but with warning

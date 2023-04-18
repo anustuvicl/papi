@@ -94,7 +94,6 @@ do {                                                                           \
 typedef struct
 {
     int device;                //!< compute device number
-    CUcontext context;         //!< CUDA driver context, or NULL if default context has already been initialized
 } profilingConfig;
 
 // Per-device configuration, buffers, stream and device information, and device pointers
@@ -147,7 +146,6 @@ void profileKernels(perDeviceData &d,
     PAPI_CALL(PAPI_create_eventset(&eventset));
     // Switch to desired device
     RUNTIME_API_CALL(cudaSetDevice(d.config.device));  // Orig code has mistake here
-    DRIVER_API_CALL(cuCtxSetCurrent(d.config.context));
     string evt_name;
     for (i = 0; i < metricNames.size(); i++) {
         evt_name = metricNames[i] + std::to_string(d.config.device);
@@ -277,12 +275,9 @@ int main(int argc, char * argv[])
         // config.maxLaunchesPerPass = 1;     // Must be >= maxRangesPerPass.  Set this to the largest count of kernel launches which may be encountered in any Pass in this Session
 
         // // Device 0 has max of 3 passes; other devices only run one pass in this sample code
-        DRIVER_API_CALL(cuCtxCreate(&(config.context), 0, device)); // Either set to a context, or may be NULL if a default context has been created
         deviceData[device].config = config;// Save this device config
 
         // Initialize CUPTI Profiling structures
-        // targetInitProfiling(deviceData[device], metricNames);
-
         // Per-stream initialization & memory allocation - copy from constant host array to each device array
         deviceData[device].streams.resize(numStreams);
         deviceData[device].d_x.resize(numStreams);
