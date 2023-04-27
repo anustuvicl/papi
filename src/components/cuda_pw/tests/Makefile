@@ -60,6 +60,9 @@ cudaOpenMP_noCuCtx.o: cudaOpenMP_noCuCtx.cu
 test_multipass_event_fail: test_multipass_event_fail.o $(UTILOBJS)
 	$(NVCC) $(NVCFLAGS) -o test_multipass_event_fail test_multipass_event_fail.o $(INCLUDE) $(UTILOBJS) $(PAPILIB) $(LDFLAGS) $(CUDALIBS)
 
+test_2thr_1gpu_not_allowed: test_2thr_1gpu_not_allowed.o
+	$(NVCC) $(NVCFLAGS) -o test_2thr_1gpu_not_allowed test_2thr_1gpu_not_allowed.o -lpthread $(UTILOBJS) $(PAPILIB) $(CUDALIBS) $(LDFLAGS)
+
 HelloWorld: HelloWorld.o $(UTILOBJS)
 	$(NVCC) $(NVCFLAGS) -o HelloWorld HelloWorld.o $(UTILOBJS) $(PAPILIB) $(CUDALIBS) $(LDFLAGS)
 

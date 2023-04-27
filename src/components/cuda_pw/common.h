@@ -33,4 +33,9 @@ int find_event_name(event_list_t *evt_table, const char *evt_name, event_rec_t *
 void free_event_name_list(event_list_t *evt_table);
 int tokenize_event_name(const char * name, char * nv_name, int * gpuid);
 
+typedef int64_t gpu_occupancy_t;
+
+int devmask_check_and_acquire(event_list_t *evt_table);
+int devmask_release(event_list_t *evt_table);
+
 #endif  // __COMMON_H__

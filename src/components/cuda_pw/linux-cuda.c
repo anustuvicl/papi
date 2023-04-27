@@ -41,7 +41,6 @@ static int cuda_init_private(void);
 
 struct cuda_ctx {
     int thread_status;
-    // native_event_table_t *ntv_table;
 };
 
 struct cuda_ctl {
@@ -193,7 +192,7 @@ static int cuda_ntv_enum_events(unsigned int *event_code, int modifier)
         case PAPI_ENUM_EVENTS:
             if (global_event_names.count == 0) {
                 res = PAPI_ENOEVNT;
-            } else if (*event_code < global_event_names.count -1) {
+            } else if (*event_code < global_event_names.count - 1) {
                 *event_code = *event_code + 1;
                 res = PAPI_OK;
             } else {
@@ -287,7 +286,7 @@ static int cuda_set_domain(hwd_control_state_t __attribute__((unused)) *ctrl, in
 
 static int cuda_update_control_state(hwd_control_state_t *ctl,
                                      NativeInfo_t *ntv_info,
-                                     int ntv_count, hwd_context_t *ctx
+                                     int ntv_count, __attribute__((unused)) hwd_context_t *ctx
 ) {
     COMPDBG("Entering with events_count %d.\n", ntv_count);
     int i, res;
@@ -297,13 +296,9 @@ static int cuda_update_control_state(hwd_control_state_t *ctl,
     if (ntv_count == 0)
         goto fn_exit;
     struct cuda_ctl *control = (struct cuda_ctl *) ctl;
-    struct cuda_ctx *this = (struct cuda_ctx *) ctx;
-    if (this->thread_status == NOT_THR_CURRENT) {
-        this->thread_status = THR_CURRENT;
-        LOCKDBG("Locking.\n");
-        _papi_hwi_lock(_cuda_pw_lock);
-        LOCKDBG("Locked.\n");
-    }
+    LOCKDBG("Locking.\n");
+    _papi_hwi_lock(_cuda_pw_lock);
+    LOCKDBG("Locked.\n");
     if (control->cuctx_arr == NULL) {
         res = cupti_init_cuctx_arr(&(control->cuctx_arr));
     }
@@ -329,8 +324,12 @@ static int cuda_update_control_state(hwd_control_state_t *ctl,
     res = cupti_control_destroy(&tmp_context);
 
 fn_exit:
+    LOCKDBG("Unlocking.\n");
+    _papi_hwi_unlock(_cuda_pw_lock);
     return res;
 fn_fail:
+    LOCKDBG("Unlocking.\n");
+    _papi_hwi_unlock(_cuda_pw_lock);
     return PAPI_ECMP;
 }
 
@@ -349,6 +348,10 @@ static int cuda_start(hwd_context_t *ctx, hwd_control_state_t *ctl)
 {
     COMPDBG("Entering.\n");
     int res, i;
+    LOCKDBG("Locking.\n");
+    _papi_hwi_lock(_cuda_pw_lock);
+    LOCKDBG("Locked.\n");
+
     struct cuda_ctx *this = (struct cuda_ctx *) ctx;
     struct cuda_ctl *control = (struct cuda_ctl *) ctl;
     // Set initial counters to zero
@@ -370,6 +373,9 @@ static int cuda_start(hwd_context_t *ctx, hwd_control_state_t *ctl)
 int cuda_stop(hwd_context_t __attribute__((unused)) *ctx, hwd_control_state_t *ctl)
 {
     COMPDBG("Entering.\n");
+    LOCKDBG("Locking.\n");
+    _papi_hwi_lock(_cuda_pw_lock);
+    LOCKDBG("Locked.\n");
     struct cuda_ctl *control = (struct cuda_ctl *) ctl;
     int res;
     res = cupti_stop( &(control->cupti_ctl), &(control->cuctx_arr) );
@@ -377,13 +383,19 @@ int cuda_stop(hwd_context_t __attribute__((unused)) *ctx, hwd_control_state_t *c
         goto fn_exit;
     res = cupti_control_destroy( &(control->cupti_ctl) );
 fn_exit:
+    LOCKDBG("Unlocking.\n");
+    _papi_hwi_unlock(_cuda_pw_lock);
     return res;
 }
 
 static int cuda_read(hwd_context_t __attribute__((unused)) *ctx, hwd_control_state_t *ctl, long long **val, int __attribute__((unused)) flags)
 {
+    COMPDBG("Entering.\n");
     struct cuda_ctl * control = (struct cuda_ctl *) ctl;
     int res;
+    LOCKDBG("Locking.\n");
+    _papi_hwi_lock(_cuda_pw_lock);
+    LOCKDBG("Locked.\n");
     res = cupti_stop( &(control->cupti_ctl), &(control->cuctx_arr) );
     if (res != PAPI_OK)
         goto fn_exit;
@@ -397,6 +409,8 @@ static int cuda_read(hwd_context_t __attribute__((unused)) *ctx, hwd_control_sta
     res = cupti_start( &(control->cupti_ctl), &(control->cuctx_arr) );
 
 fn_exit:
+    LOCKDBG("Unlocking.\n");
+    _papi_hwi_unlock(_cuda_pw_lock);
     return res;
 }
 

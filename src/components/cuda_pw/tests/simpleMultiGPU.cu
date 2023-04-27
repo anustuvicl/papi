@@ -302,8 +302,8 @@ int main( int argc, char **argv )
     char tmpEventName[64];
     eventCount = 0;
     for( i = 0; i < GPU_N; i++ ) {
+        CHECK_CU_ERROR(cuCtxSetCurrent(ctx[i]), "cuCtxSetCurrent");
         for ( ee=0; ee<numEventNames; ee++ ) {
-            CHECK_CU_ERROR(cuCtxSetCurrent(ctx[i]), "cuCtxSetCurrent");
             // Create a device specific event.
             snprintf( tmpEventName, 64, "%s:device=%d\0", EventNames[ee], i );
             retval = PAPI_add_named_event( EventSet, tmpEventName );
@@ -438,6 +438,7 @@ int main( int argc, char **argv )
         CHECK_CUDA_ERROR( cudaFree( plan[i].d_Data ) );
         // Shut down this GPU
         CHECK_CUDA_ERROR( cudaStreamDestroy( plan[i].stream ) );
+        CHECK_CU_ERROR( cuCtxDestroy(ctx[i]), "cuCtxDestroy");
     }
 
 #ifdef CUPTI_ONLY

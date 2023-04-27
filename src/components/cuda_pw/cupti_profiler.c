@@ -221,9 +221,12 @@ struct cupti_gpu_control_s {
     byte_array_t counterAvailabilityImage;
 };
 
+enum running_e {False, True};
+
 struct cupti_profiler_control_s {
     struct cupti_gpu_control_s *ctl;
     int read_count;
+    enum running_e running;
 };
 
 static int add_events_per_gpu(struct event_name_list_s * event_names, int event_count, int *evt_ids, struct cupti_profiler_control_s *state)
@@ -258,7 +261,7 @@ static int retrieve_metric_details(struct NVPA_MetricsContext *pMetricsContext, 
                                    char *description, int *numDep, NVPA_RawMetricRequest **pRMR)
 {
     COMPDBG("Entering.\n");
-    int num_dep, i;
+    int num_dep, i, len;
     NVPA_RawMetricRequest *rmr;
     NVPA_Status nvpa_err;
 
@@ -289,9 +292,13 @@ static int retrieve_metric_details(struct NVPA_MetricsContext *pMetricsContext, 
         rmr[i].structSize = NVPW_MetricsContext_GetMetricProperties_End_Params_STRUCT_SIZE;
     }
 
-    snprintf(description, PAPI_2MAX_STR_LEN, "%s. Units=(%s)",
+    len = snprintf(description, PAPI_2MAX_STR_LEN, "%s. Units=(%s)",
                 getMetricPropertiesBeginParams.pDescription,
                 getMetricPropertiesBeginParams.pDimUnits);
+    if (len > PAPI_2MAX_STR_LEN) {
+        ERRDBG("String formatting exceeded max string length.\n");
+        return PAPI_ENOMEM;
+    }
     *numDep = num_dep;
     *pRMR = rmr;
     NVPW_MetricsContext_GetMetricProperties_End_Params getMetricPropertiesEndParams = {
@@ -457,6 +464,30 @@ static int control_state_validate(struct cupti_profiler_control_s *state)
     }
 fn_exit:
     return res;
+}
+
+static int get_counter_availability(struct cupti_gpu_control_s *ctl, CUcontext ctx)
+{
+    int res;
+    // Get size of counterAvailabilityImage - in first pass, GetCounterAvailability return size needed for data
+    CUpti_Profiler_GetCounterAvailability_Params getCounterAvailabilityParams = {
+        .structSize = CUpti_Profiler_GetCounterAvailability_Params_STRUCT_SIZE,
+        .pPriv = NULL,
+        .ctx = ctx
+    };
+    res = cuptiProfilerGetCounterAvailabilityPtr(&getCounterAvailabilityParams);
+    if (res != CUPTI_SUCCESS)
+        return PAPI_ENOSUPP;
+    // Allocate sized counterAvailabilityImage
+    ctl->counterAvailabilityImage.size = getCounterAvailabilityParams.counterAvailabilityImageSize;
+    ctl->counterAvailabilityImage.data = (uint8_t *) papi_malloc(ctl->counterAvailabilityImage.size);
+
+    // Initialize counterAvailabilityImage
+    getCounterAvailabilityParams.pCounterAvailabilityImage = ctl->counterAvailabilityImage.data;
+    res = cuptiProfilerGetCounterAvailabilityPtr(&getCounterAvailabilityParams);
+    if (res != CUPTI_SUCCESS)
+        return PAPI_ENOSUPP;
+    return PAPI_OK;
 }
 
 // Adapted from `metric.cpp` -------------------------
@@ -694,7 +725,6 @@ static int begin_profiling(struct cupti_gpu_control_s *ctl, CUcontext cuctx)
         .replayMode = CUPTI_UserReplay,
         .maxRangesPerPass = 1,
         .maxLaunchesPerPass = 1,
-
     };
     CUPTI_CALL(cuptiProfilerBeginSessionPtr(&beginSessionParams), return PAPI_ENOSUPP);
 
@@ -994,9 +1024,14 @@ int cupti_profiler_enumerate_all_metric_names(event_list_t *all_evt_names)
     TICK;
     char evt_name[PAPI_2MAX_STR_LEN];
     event_rec_t *find=NULL;
+    int len;
     for (gpu_id=0; gpu_id<num_gpus; gpu_id++) {
         for (i=0; i<avail_events[gpu_id].num_metrics; i++) {
-            snprintf(evt_name, PAPI_2MAX_STR_LEN-8, "%s:device=%d", avail_events[gpu_id].nv_metrics->evts[i].name, gpu_id);
+            len = snprintf(evt_name, PAPI_2MAX_STR_LEN, "%s:device=%d", avail_events[gpu_id].nv_metrics->evts[i].name, gpu_id);
+            if (len > PAPI_2MAX_STR_LEN) {
+                ERRDBG("String formatting exceeded maximum length.\n");
+                return PAPI_ENOMEM;
+            }
             if (find_event_name(all_evt_names, evt_name, &find) == PAPI_ENOEVNT) {
                 res = insert_event_record(all_evt_names, evt_name, i, 0);
             }
@@ -1157,18 +1192,18 @@ int cupti_profiler_control_create(struct event_name_list_s * all_event_names, in
 
     // Register the user created cuda context for the current gpu if not already known
     CUcontext *cu_ctx = (CUcontext *) (*pcu_ctx);
-    CUcontext temp;
+    CUcontext tempCtx;
     res = cudaGetDevicePtr(&gpu_id);
     if (res != cudaSuccess) {
         return PAPI_ENOSUPP;
     }
-    res = cuCtxGetCurrentPtr(&temp);
+    res = cuCtxGetCurrentPtr(&tempCtx);
     if (res != CUDA_SUCCESS) {
         return PAPI_ENOSUPP;
     }
     if (cu_ctx[gpu_id] == NULL) {
-        if (temp != NULL) {
-            LOGDBG("Registering device = %d with ctx = %p.\n", gpu_id, temp);
+        if (tempCtx != NULL) {
+            LOGDBG("Registering device = %d with ctx = %p.\n", gpu_id, tempCtx);
             CUDA_CALL(cuCtxGetCurrentPtr(&cu_ctx[gpu_id]), return PAPI_ENOSUPP);
         }
         else {
@@ -1177,8 +1212,8 @@ int cupti_profiler_control_create(struct event_name_list_s * all_event_names, in
             LOGDBG("Using primary device context %p for device %d.\n", cu_ctx[gpu_id], gpu_id);
         }
     }
-    else if (cu_ctx[gpu_id] != temp) {  // If context has changed keep the first seen one but with warning
-        ERRDBG("Warning: cuda context for gpu %d has changed from %p to %p\n", gpu_id, cu_ctx[gpu_id], temp);
+    else if (cu_ctx[gpu_id] != tempCtx) {  // If context has changed keep the first seen one but with warning
+        ERRDBG("Warning: cuda context for gpu %d has changed from %p to %p\n", gpu_id, cu_ctx[gpu_id], tempCtx);
     }
 
     // Update event names to be profiled for corresponding gpus
@@ -1221,25 +1256,43 @@ int cupti_profiler_start(void **pctl, void **pcu_ctx)
     int gpu_id;
     char chip_name[32];
     int res = PAPI_OK;
-    for (gpu_id=0; gpu_id<num_gpus; gpu_id++)
-    {
+    for (gpu_id=0; gpu_id<num_gpus; gpu_id++) {
         ctl = &(state->ctl[gpu_id]);
         LOGDBG("Device num %d: event_count %d, rmr count %d\n", gpu_id, ctl->event_names.count, ctl->rmr_count);
         if (ctl->event_names.count == 0)
             continue;
+        res = devmask_check_and_acquire(&(state->ctl[gpu_id].event_names));
+        if (res != PAPI_OK) {
+            ERRDBG("Profiling same gpu from multiple event sets not allowed.\n");
+            return res;
+        }
         res = get_chip_name(gpu_id, chip_name);
         if (res != PAPI_OK) {
             ERRDBG("Failed to get chipname.\n");
             goto fn_fail;
         }
+        res = get_counter_availability(ctl, cu_ctx[gpu_id]);
+        if (res != PAPI_OK) {
+            ERRDBG("Error getting counter availability image.\n");
+            return res;
+        }
         // CUPTI profiler host configuration
         res = metric_get_config_image(chip_name, ctl);
-        res = metric_get_counter_data_prefix_image(chip_name, ctl);
-        res = create_counter_data_image(ctl);
+        res += metric_get_counter_data_prefix_image(chip_name, ctl);
+        res += create_counter_data_image(ctl);
+        if (res != PAPI_OK) {
+            ERRDBG("Failed to create CUPTI profiler state for gpu %d\n", gpu_id);
+            goto fn_fail;
+        }
         LOGDBG("%d\t%d\t%d\n", ctl->configImage.size, ctl->counterDataScratchBuffer.size,
                                ctl->counterDataImage.size);
         res = begin_profiling(ctl, cu_ctx[gpu_id]);
+        if (res != PAPI_OK) {
+            ERRDBG("Failed to start profiling for gpu %d\n", gpu_id);
+            goto fn_fail;
+        }
     }
+    state->running = True;
     return PAPI_OK;
 fn_fail:
     return PAPI_ECMP;
@@ -1253,13 +1306,27 @@ int cupti_profiler_stop(void **pctl, void **pcu_ctx)
     CUcontext * cu_ctx = (CUcontext *) (*pcu_ctx);
     int gpu_id;
     int res = PAPI_OK;
+    if (state->running == False) {
+        ERRDBG("Profiler is already stopped.\n");
+        goto fn_fail;
+    }
     for (gpu_id=0; gpu_id<num_gpus; gpu_id++) {
         ctl = &(state->ctl[gpu_id]);
         if (ctl->event_names.count == 0)
             continue;
         res = end_profiling(ctl, cu_ctx[gpu_id]);
+        if (res != PAPI_OK) {
+            ERRDBG("Failed to stop profiling on gpu %d\n", gpu_id);
+            goto fn_fail;
+        }
+        res = devmask_release(&(state->ctl[gpu_id].event_names));
+        if (res != PAPI_OK)
+            goto fn_fail;
     }
+    state->running = False;
     return res;
+fn_fail:
+    return PAPI_ECMP;
 }
 
 enum {SpotValue, RunningMin, RunningMax, RunningSum};

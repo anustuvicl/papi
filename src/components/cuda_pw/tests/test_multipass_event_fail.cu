@@ -19,7 +19,6 @@ int test_PAPI_add_named_event(int *EventSet) {
         res = PAPI_add_named_event(*EventSet, EventName[i]);
         if (res != PAPI_OK) {
             fprintf(stderr, "Error %d: Failed to add event %s\n", res, EventName[i]);
-            goto fail;
         }
     }
     if (res == PAPI_EMULPASS)
@@ -41,7 +40,6 @@ int test_PAPI_add_event(int *EventSet) {
         res = PAPI_add_event(*EventSet, event);
         if (res != PAPI_OK) {
             fprintf(stderr, "Error %d: Failed to add event %s\n", res, EventName[i]);
-            goto fail;
         }
     }
     if (res == PAPI_EMULPASS)
@@ -66,7 +64,6 @@ int test_PAPI_add_events(int *EventSet) {
     res = PAPI_add_events(*EventSet, events, numEvents);
     if (res != PAPI_OK) {
         fprintf(stderr, "Error %d: Failed to add %d events\n", res, numEvents);
-        goto fail;
     }
     if (res == 2)        // Returns index at which error occurred.
         return PASS;

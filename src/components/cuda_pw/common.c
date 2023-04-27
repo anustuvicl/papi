@@ -92,6 +92,7 @@ int tokenize_event_name(const char * name, char * nv_name, int * gpuid)
 
     const char token[] = ":device=";
     const int tok_len = 8;
+    char *rest;
 
     char *getdevstr = strstr(name, token);
     if (getdevstr == NULL) {
@@ -99,10 +100,56 @@ int tokenize_event_name(const char * name, char * nv_name, int * gpuid)
         return PAPI_EINVAL;
     }
     getdevstr += tok_len;
-    *gpuid = atoi(getdevstr);
+    *gpuid = strtol(getdevstr, &rest, 10);
     numchars = strlen(name) - strlen(getdevstr) - tok_len;
     strncpy(nv_name, name, numchars);
     nv_name[numchars] = '\0';
 
+    return PAPI_OK;
+}
+
+// Functions based on bitmasking to detect gpu exclusivity
+static gpu_occupancy_t global_gpu_bitmask;
+
+static int _devmask_events_get(event_list_t *evt_table, gpu_occupancy_t *bitmask)
+{
+    int res, gpu_id;
+    long i;
+    char nv_name[PAPI_2MAX_STR_LEN];
+    gpu_occupancy_t acq_mask = 0;
+    for (i = 0; i < evt_table->count; i++) {
+        res = tokenize_event_name(evt_table->evts[0].name, nv_name, &gpu_id);
+        if (res != PAPI_OK)
+            goto fn_exit;
+        acq_mask |= (1 << gpu_id);
+    }
+    *bitmask = acq_mask;
+fn_exit:
+    return res;
+}
+
+int devmask_check_and_acquire(event_list_t *evt_table)
+{
+    gpu_occupancy_t bitmask;
+    int res = _devmask_events_get(evt_table, &bitmask);
+    if (res != PAPI_OK)
+        return res;
+    if (bitmask & global_gpu_bitmask) {
+        return PAPI_ECNFLCT;
+    }
+    global_gpu_bitmask |= bitmask;
+    return PAPI_OK;
+}
+
+int devmask_release(event_list_t *evt_table)
+{
+    gpu_occupancy_t bitmask;
+    int res = _devmask_events_get(evt_table, &bitmask);
+    if (res != PAPI_OK)
+        return res;
+    if ((bitmask & global_gpu_bitmask) != bitmask) {
+        return PAPI_EMISC;
+    }
+    global_gpu_bitmask ^= bitmask;
     return PAPI_OK;
 }
