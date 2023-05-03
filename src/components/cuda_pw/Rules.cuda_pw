@@ -1,6 +1,6 @@
-# Note PAPI_CUDA_ROOT is an environment variable that must be set.
-# Set default if the root environment variable is not already set.
-PAPI_CUDA_ROOT ?= /opt/cuda
+# Note: If PAPI_CUDA_ROOT environment variable is set then build using $PAPI_CUDA_ROOT/bin/nvcc.
+# If not set find nvcc installed on system and set it.
+PAPI_CUDA_ROOT ?= $(shell dirname $(shell dirname $(shell which nvcc)))
 
 CUDA_MACS = -DPAPI_CUDA_MAIN=$(PAPI_CUDA_MAIN) -DPAPI_CUDA_RUNTIME=$(PAPI_CUDA_RUNTIME)
 CUDA_MACS+= -DPAPI_CUDA_CUPTI=$(PAPI_CUDA_CUPTI) -DPAPI_CUDA_PERFWORKS=$(PAPI_CUDA_PERFWORKS)
@@ -16,7 +16,7 @@ COMPOBJS += linux-cuda.o common.o cupti_component.o cuda_utils.o cupti_profiler.
 
 # CFLAGS specifies compile flags; need include files here, and macro defines.
 CFLAGS += -I$(PAPI_CUDA_ROOT)/include -I$(PAPI_CUDA_ROOT)/extras/CUPTI/include -g $(CUDA_MACS)
-LDFLAGS += $(LDL) -g
+LDFLAGS += $(LDL)
 
 linux-cuda.o: components/cuda_pw/linux-cuda.c $(HEADERS)
 	$(CC) $(LIBCFLAGS) $(OPTFLAGS) -c components/cuda_pw/linux-cuda.c -o linux-cuda.o

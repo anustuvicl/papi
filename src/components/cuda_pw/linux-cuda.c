@@ -36,17 +36,10 @@ static int cuda_init_private(void);
 
 #define PAPI_CUDA_MAX_COUNTERS 512
 
-#define THR_CURRENT 1
-#define NOT_THR_CURRENT 0
-
-struct cuda_ctx {
-    int thread_status;
-};
-
 struct cuda_ctl {
     int events_count;
     int events_id[PAPI_CUDA_MAX_COUNTERS];
-    void * cuctx_arr;  // pointer to all gpu user CUcontexts for a thread
+    void * thread_info;  // thread specific info: all gpu user CUcontexts
     void * cupti_ctl;  // pointer to all gpu cuda profiler state
     long long values[PAPI_CUDA_MAX_COUNTERS];
 };
@@ -75,7 +68,7 @@ papi_vector_t _cuda_pw_vector = {
         .initialized = 0,
     },
     .size = {
-        .context = sizeof(struct cuda_ctx),
+        .context = 0,
         .control_state = sizeof(struct cuda_ctl),
     },
     .init_component = cuda_init_component,
@@ -299,8 +292,8 @@ static int cuda_update_control_state(hwd_control_state_t *ctl,
     LOCKDBG("Locking.\n");
     _papi_hwi_lock(_cuda_pw_lock);
     LOCKDBG("Locked.\n");
-    if (control->cuctx_arr == NULL) {
-        res = cupti_init_cuctx_arr(&(control->cuctx_arr));
+    if (control->thread_info == NULL) {
+        res = cupti_thread_info_init(&(control->thread_info));
     }
     control->events_count = ntv_count;
 
@@ -316,7 +309,7 @@ static int cuda_update_control_state(hwd_control_state_t *ctl,
 
     // Validate the added names so far in a temporary context
     void *tmp_context;
-    res = cupti_control_create(&global_event_names, control->events_count, &(control->events_id[0]), &tmp_context, &(control->cuctx_arr));
+    res = cupti_control_create(&global_event_names, control->events_count, control->events_id, &tmp_context, &(control->thread_info));
     if (res != PAPI_OK) {
         cupti_control_destroy(&tmp_context);
         goto fn_exit;
@@ -337,14 +330,17 @@ static int cuda_cleanup_eventset(hwd_control_state_t *ctl)
 {
     COMPDBG("Entering.\n");
     struct cuda_ctl *control = (struct cuda_ctl *) ctl;
-    if (control->cuctx_arr != NULL) {
-        free(control->cuctx_arr);
-        control->cuctx_arr = NULL;
-    }
+    int res = PAPI_OK;
+    if (control->cupti_ctl)
+        res += cupti_control_destroy(&(control->cupti_ctl));
+    if (control->thread_info)
+        res += cupti_thread_info_free(&(control->thread_info));
+    if (res != PAPI_OK)
+        return PAPI_ECMP;
     return PAPI_OK;
 }
 
-static int cuda_start(hwd_context_t *ctx, hwd_control_state_t *ctl)
+static int cuda_start(hwd_context_t __attribute__((unused)) *ctx, hwd_control_state_t *ctl)
 {
     COMPDBG("Entering.\n");
     int res, i;
@@ -352,7 +348,6 @@ static int cuda_start(hwd_context_t *ctx, hwd_control_state_t *ctl)
     _papi_hwi_lock(_cuda_pw_lock);
     LOCKDBG("Locked.\n");
 
-    struct cuda_ctx *this = (struct cuda_ctx *) ctx;
     struct cuda_ctl *control = (struct cuda_ctl *) ctl;
     // Set initial counters to zero
     for (i=0; i<control->events_count; i++) {
@@ -360,11 +355,10 @@ static int cuda_start(hwd_context_t *ctx, hwd_control_state_t *ctl)
     }
     res = cupti_control_create(&global_event_names,
                              control->events_count,
-                             &(control->events_id[0]),
+                             control->events_id,
                              &(control->cupti_ctl),
-                             &(control->cuctx_arr));
-    res = cupti_start( &(control->cupti_ctl), &(control->cuctx_arr) );
-    this->thread_status = NOT_THR_CURRENT;
+                             &(control->thread_info));
+    res = cupti_start( &(control->cupti_ctl), &(control->thread_info) );
     LOCKDBG("Unlocking.\n");
     _papi_hwi_unlock(_cuda_pw_lock);
     return res;
@@ -378,7 +372,7 @@ int cuda_stop(hwd_context_t __attribute__((unused)) *ctx, hwd_control_state_t *c
     LOCKDBG("Locked.\n");
     struct cuda_ctl *control = (struct cuda_ctl *) ctl;
     int res;
-    res = cupti_stop( &(control->cupti_ctl), &(control->cuctx_arr) );
+    res = cupti_stop( &(control->cupti_ctl), &(control->thread_info) );
     if (res != PAPI_OK)
         goto fn_exit;
     res = cupti_control_destroy( &(control->cupti_ctl) );
@@ -396,7 +390,7 @@ static int cuda_read(hwd_context_t __attribute__((unused)) *ctx, hwd_control_sta
     LOCKDBG("Locking.\n");
     _papi_hwi_lock(_cuda_pw_lock);
     LOCKDBG("Locked.\n");
-    res = cupti_stop( &(control->cupti_ctl), &(control->cuctx_arr) );
+    res = cupti_stop( &(control->cupti_ctl), &(control->thread_info) );
     if (res != PAPI_OK)
         goto fn_exit;
     // First collect the values from the lower layer for last session
@@ -406,7 +400,7 @@ static int cuda_read(hwd_context_t __attribute__((unused)) *ctx, hwd_control_sta
     // Then copy the values to the user array `val`
     *val = control->values;
 
-    res = cupti_start( &(control->cupti_ctl), &(control->cuctx_arr) );
+    res = cupti_start( &(control->cupti_ctl), &(control->thread_info) );
 
 fn_exit:
     LOCKDBG("Unlocking.\n");

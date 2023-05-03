@@ -4,90 +4,193 @@
 #include "papi_memory.h"
 
 #include "cuda_utils.h"
+#include "common.h"
 
-int get_env_papi_cuda_root(void)
+static void *dl_drv, *dl_rt;
+
+static int load_cuda_sym(void)
 {
-    PAPI_CUDA_ROOT_ENV = getenv("PAPI_CUDA_ROOT");
-    if (PAPI_CUDA_ROOT_ENV == NULL) {
-        return PAPI_ECMP;
+    dl_drv = dlopen("libcuda.so", RTLD_NOW | RTLD_GLOBAL);
+    if (!dl_drv) {
+        ERRDBG("Loading installed libcuda.so failed. Check that cuda drivers are installed.\n");
+        goto fn_fail;
     }
+
+    cuCtxSetCurrentPtr           = DLSYM_AND_CHECK(dl_drv, "cuCtxSetCurrent");
+    cuCtxGetCurrentPtr           = DLSYM_AND_CHECK(dl_drv, "cuCtxGetCurrent");
+    cuCtxDestroyPtr              = DLSYM_AND_CHECK(dl_drv, "cuCtxDestroy");
+    cuCtxCreatePtr               = DLSYM_AND_CHECK(dl_drv, "cuCtxCreate");
+    cuCtxGetDevicePtr            = DLSYM_AND_CHECK(dl_drv, "cuCtxGetDevice");
+    cuDeviceGetPtr               = DLSYM_AND_CHECK(dl_drv, "cuDeviceGet");
+    cuDeviceGetCountPtr          = DLSYM_AND_CHECK(dl_drv, "cuDeviceGetCount");
+    cuDeviceGetNamePtr           = DLSYM_AND_CHECK(dl_drv, "cuDeviceGetName");
+    cuDevicePrimaryCtxRetainPtr  = DLSYM_AND_CHECK(dl_drv, "cuDevicePrimaryCtxRetain");
+    cuDevicePrimaryCtxReleasePtr = DLSYM_AND_CHECK(dl_drv, "cuDevicePrimaryCtxRelease");
+    cuInitPtr                    = DLSYM_AND_CHECK(dl_drv, "cuInit");
+    cuGetErrorStringPtr          = DLSYM_AND_CHECK(dl_drv, "cuGetErrorString");
+    cuCtxPopCurrentPtr           = DLSYM_AND_CHECK(dl_drv, "cuCtxPopCurrent");
+    cuCtxPushCurrentPtr          = DLSYM_AND_CHECK(dl_drv, "cuCtxPushCurrent");
+    cuCtxSynchronizePtr          = DLSYM_AND_CHECK(dl_drv, "cuCtxSynchronize");
+    cuDeviceGetAttributePtr      = DLSYM_AND_CHECK(dl_drv, "cuDeviceGetAttribute");
+
+    Dl_info info;
+    dladdr(cuCtxSetCurrentPtr, &info);
+    LOGDBG("CUDA driver library loaded from %s\n", info.dli_fname);
+    return PAPI_OK;
+fn_fail:
+    return PAPI_ENOSUPP;
+}
+
+static int unload_cuda_sym(void)
+{
+    if (dl_drv) {
+        dlclose(dl_drv);
+        dl_drv = NULL;
+    }
+    cuCtxSetCurrentPtr           = NULL;
+    cuCtxGetCurrentPtr           = NULL;
+    cuCtxDestroyPtr              = NULL;
+    cuCtxCreatePtr               = NULL;
+    cuCtxGetDevicePtr            = NULL;
+    cuDeviceGetPtr               = NULL;
+    cuDeviceGetCountPtr          = NULL;
+    cuDeviceGetNamePtr           = NULL;
+    cuDevicePrimaryCtxRetainPtr  = NULL;
+    cuDevicePrimaryCtxReleasePtr = NULL;
+    cuInitPtr                    = NULL;
+    cuGetErrorStringPtr          = NULL;
+    cuCtxPopCurrentPtr           = NULL;
+    cuCtxPushCurrentPtr          = NULL;
+    cuCtxSynchronizePtr          = NULL;
+    cuDeviceGetAttributePtr      = NULL;
     return PAPI_OK;
 }
 
-int load_cuda_sym(void)
+static int load_cudart_sym(void)
 {
-    int papiErr = PAPI_OK;
-    dl1 = dlopen("libcuda.so", RTLD_NOW | RTLD_GLOBAL);
-    if (dl1 == NULL) {
-        ERRDBG("Loading libcuda.so failed.\n");
-        goto fn_fail;
+    char dlname[] = "libcudart.so";
+    char *found_files[MAX_FILES];
+    int count, i, found = 0;
+    char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
+    if (papi_cuda_root) {
+        count = search_files_in_path(dlname, papi_cuda_root, found_files);
+        for (i = 0; i < count; i++) {
+            dl_rt = dlopen(found_files[i], RTLD_NOW | RTLD_GLOBAL);
+            if (dl_rt) {
+                found = 1;
+                break;
+            }
+        }
+        for (i = 0; i < count; i++) {
+            free(found_files[i]);
+        }
+    }
+    if (!found) {
+        dl_rt = dlopen(dlname, RTLD_NOW | RTLD_GLOBAL);
+        if (!dl_rt) {
+            ERRDBG("Loading libcudart.so failed. Try setting PAPI_CUDA_ROOT\n");
+            goto fn_fail;
+        }
     }
 
-    cuCtxSetCurrentPtr = DLSYM_AND_CHECK(dl1, "cuCtxSetCurrent");
-    cuCtxGetCurrentPtr = DLSYM_AND_CHECK(dl1, "cuCtxGetCurrent");
-    cuCtxDestroyPtr = DLSYM_AND_CHECK(dl1, "cuCtxDestroy");
-    cuCtxCreatePtr = DLSYM_AND_CHECK(dl1, "cuCtxCreate");
-    cuCtxGetDevicePtr = DLSYM_AND_CHECK(dl1, "cuCtxGetDevice");
-    cuDeviceGetPtr = DLSYM_AND_CHECK(dl1, "cuDeviceGet");
-    cuDeviceGetCountPtr = DLSYM_AND_CHECK(dl1, "cuDeviceGetCount");
-    cuDeviceGetNamePtr = DLSYM_AND_CHECK(dl1, "cuDeviceGetName");
-    cuDevicePrimaryCtxRetainPtr = DLSYM_AND_CHECK(dl1, "cuDevicePrimaryCtxRetain");
-    cuDevicePrimaryCtxReleasePtr = DLSYM_AND_CHECK(dl1, "cuDevicePrimaryCtxRelease");
-    cuInitPtr = DLSYM_AND_CHECK(dl1, "cuInit");
-    cuGetErrorStringPtr = DLSYM_AND_CHECK(dl1, "cuGetErrorString");
-    cuCtxPopCurrentPtr = DLSYM_AND_CHECK(dl1, "cuCtxPopCurrent");
-    cuCtxPushCurrentPtr = DLSYM_AND_CHECK(dl1, "cuCtxPushCurrent");
-    cuCtxSynchronizePtr = DLSYM_AND_CHECK(dl1, "cuCtxSynchronize");
-    cuDeviceGetAttributePtr = DLSYM_AND_CHECK(dl1, "cuDeviceGetAttribute");
+    cudaGetDevicePtr           = DLSYM_AND_CHECK(dl_rt, "cudaGetDevice");
+    cudaGetDeviceCountPtr      = DLSYM_AND_CHECK(dl_rt, "cudaGetDeviceCount");
+    cudaGetDevicePropertiesPtr = DLSYM_AND_CHECK(dl_rt, "cudaGetDeviceProperties");
+    cudaDeviceGetAttributePtr  = DLSYM_AND_CHECK(dl_rt, "cudaDeviceGetAttribute");
+    cudaSetDevicePtr           = DLSYM_AND_CHECK(dl_rt, "cudaSetDevice");
+    cudaFreePtr                = DLSYM_AND_CHECK(dl_rt, "cudaFree");
+    cudaDriverGetVersionPtr    = DLSYM_AND_CHECK(dl_rt, "cudaDriverGetVersion");
+    cudaRuntimeGetVersionPtr   = DLSYM_AND_CHECK(dl_rt, "cudaRuntimeGetVersion");
 
-    fn_exit:
-        return papiErr;
-    fn_fail:
-        papiErr = PAPI_ENOSUPP;
-        goto fn_exit;
+    Dl_info info;
+    dladdr(cudaGetDevicePtr, &info);
+    LOGDBG("CUDA runtime library loaded from %s\n", info.dli_fname);
+    return PAPI_OK;
+fn_fail:
+    return PAPI_ENOSUPP;
 }
 
-int load_cudart_sym(void)
+static int unload_cudart_sym(void)
 {
-    int papiErr = PAPI_OK;
-    dl2 = dlopen("libcudart.so", RTLD_NOW | RTLD_GLOBAL);
-    if (dl2 == NULL) {
-        ERRDBG("Loading libcudart.so failed.\n");
-        goto fn_fail;
+    if (dl_rt) {
+        dlclose(dl_rt);
+        dl_rt = NULL;
     }
-
-    cudaGetDevicePtr = DLSYM_AND_CHECK(dl2, "cudaGetDevice");
-    cudaGetDeviceCountPtr = DLSYM_AND_CHECK(dl2, "cudaGetDeviceCount");
-    cudaGetDevicePropertiesPtr = DLSYM_AND_CHECK(dl2, "cudaGetDeviceProperties");
-    cudaDeviceGetAttributePtr = DLSYM_AND_CHECK(dl2, "cudaDeviceGetAttribute");
-    cudaSetDevicePtr = DLSYM_AND_CHECK(dl2, "cudaSetDevice");
-    cudaFreePtr = DLSYM_AND_CHECK(dl2, "cudaFree");
-    cudaDriverGetVersionPtr = DLSYM_AND_CHECK(dl2, "cudaDriverGetVersion");
-    cudaRuntimeGetVersionPtr = DLSYM_AND_CHECK(dl2, "cudaRuntimeGetVersion");
-
-    fn_exit:
-        return papiErr;
-    fn_fail:
-        papiErr = PAPI_ENOSUPP;
-        goto fn_exit;
+    cudaGetDevicePtr           = NULL;
+    cudaGetDeviceCountPtr      = NULL;
+    cudaGetDevicePropertiesPtr = NULL;
+    cudaDeviceGetAttributePtr  = NULL;
+    cudaSetDevicePtr           = NULL;
+    cudaFreePtr                = NULL;
+    cudaDriverGetVersionPtr    = NULL;
+    cudaRuntimeGetVersionPtr   = NULL;
+    return PAPI_OK;
 }
 
-int load_cupti_common_sym(void)
+static int load_cupti_common_sym(void)
 {
-    int papiErr = PAPI_OK;
-    dl3 = dlopen("libcupti.so", RTLD_NOW | RTLD_GLOBAL);
-    if (dl3 == NULL) {
-        ERRDBG("Loading libcupti.so failed.\n");
-        goto fn_fail;
+    char dlname[] = "libcupti.so";
+    char *found_files[MAX_FILES];
+    int count, i, found = 0;
+    char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
+    if (papi_cuda_root) {
+        count = search_files_in_path(dlname, papi_cuda_root, found_files);
+        for (i = 0; i < count; i++) {
+            dl_cupti = dlopen(found_files[i], RTLD_NOW | RTLD_GLOBAL);
+            if (dl_cupti) {
+                found = 1;
+                break;
+            }
+        }
+        for (i =0; i < count; i++) {
+            free(found_files[i]);
+        }
     }
+    if (!found) {
+        dl_cupti = dlopen(dlname, RTLD_NOW | RTLD_GLOBAL);
+        if (!dl_cupti) {
+            ERRDBG("Loading libcupti.so failed. Try setting PAPI_CUDA_ROOT\n");
+            goto fn_fail;
+        }
+    }
+    cuptiGetVersionPtr = DLSYM_AND_CHECK(dl_cupti, "cuptiGetVersion");
 
-    cuptiGetVersionPtr = DLSYM_AND_CHECK(dl3, "cuptiGetVersion");
+    Dl_info info;
+    dladdr(cuptiGetVersionPtr, &info);
+    LOGDBG("CUPTI library loaded from %s\n", info.dli_fname);
+    return PAPI_OK;
+fn_fail:
+    return PAPI_ENOSUPP;
+}
 
-    fn_exit:
-        return papiErr;
-    fn_fail:
-        papiErr = PAPI_ENOSUPP;
-        goto fn_exit;
+static int unload_cupti_common_sym(void)
+{
+    if (dl_cupti) {
+        dlclose(dl_cupti);
+        dl_cupti = NULL;
+    }
+    cuptiGetVersionPtr = NULL;
+    return PAPI_OK;
+}
+
+int utils_load_cuda_sym(void)
+{
+    int res;
+    res = load_cuda_sym();
+    res += load_cudart_sym();
+    res += load_cupti_common_sym();
+    if (res != PAPI_OK)
+        return PAPI_ESYS;
+    else
+        return PAPI_OK;
+}
+
+int utils_unload_cuda_sym(void)
+{
+    unload_cuda_sym();
+    unload_cudart_sym();
+    unload_cupti_common_sym();
+    return PAPI_OK;
 }
 
 int check_cuda_api_versions(void)
@@ -97,8 +200,8 @@ int check_cuda_api_versions(void)
     CUDART_CALL(cudaRuntimeGetVersionPtr(&runtimeversion), return PAPI_ENOSUPP );
     CUDART_CALL(cudaDriverGetVersionPtr(&driverversion), return PAPI_ENOSUPP );
     CUPTI_CALL(cuptiGetVersionPtr(&cuptiversion), return PAPI_ENOSUPP );
-    if (runtimeversion != CUDA_VERSION || cuptiversion != CUPTI_API_VERSION)
-        return PAPI_ECMP;
+    // if (runtimeversion != CUDA_VERSION || cuptiversion != CUPTI_API_VERSION)
+        // return PAPI_ECMP;
     if (driverversion < runtimeversion)
         return PAPI_ESYS;
     return PAPI_OK;
@@ -142,7 +245,7 @@ int is_mixed_compute_capability(void)
         return PAPI_ENOSUPP;
 }
 
-int init_CUcontext_array(void ** pcuda_context)
+int CUcontext_array_init(void ** pcuda_context)
 {
     COMPDBG("Entering.\n");
     CUcontext *cuCtx = (CUcontext *) papi_calloc (get_device_count(), sizeof(CUcontext));
@@ -150,5 +253,12 @@ int init_CUcontext_array(void ** pcuda_context)
         return PAPI_ENOMEM;
     }
     *pcuda_context = (void *) cuCtx;
+    return PAPI_OK;
+}
+
+int CUcontext_array_free(void **pcuda_context)
+{
+    free(*pcuda_context);
+    *pcuda_context = NULL;
     return PAPI_OK;
 }

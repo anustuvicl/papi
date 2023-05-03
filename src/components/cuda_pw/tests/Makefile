@@ -1,7 +1,7 @@
 NAME=cuda_pw
 include ../../Makefile_comp_tests.target
 
-PAPI_CUDA_ROOT ?= /opt/cuda
+PAPI_CUDA_ROOT ?= $(shell dirname $(shell dirname $(shell which nvcc)))
 PAPI_CUPTI_ROOT ?= $(PAPI_CUDA_ROOT)/extras/CUPTI
 
 TESTS = HelloWorld simpleMultiGPU \
@@ -12,14 +12,20 @@ TESTS_NOCTX = concurrent_profiling_noCuCtx pthreads_noCuCtx \
 			  cudaOpenMP_noCuCtx HelloWorld_noCuCtx \
 			  simpleMultiGPU_noCuCtx
 
-cuda_pw_tests: $(TESTS) $(TESTS_NOCTX)
-
 NVCC = $(PAPI_CUDA_ROOT)/bin/nvcc
-NVCFLAGS = -g -ccbin='$(CC)'
-INCLUDE += -I$(PAPI_CUDA_ROOT)/include -I$(PAPI_CUPTI_ROOT)/include
-CUDALIBS = -L$(CUDRV_DIR)/lib64 -L$(PAPI_CUDA_ROOT)/lib64 -L$(PAPI_CUDA_ROOT)/lib64/stubs -L$(PAPI_CUPTI_ROOT)/lib64 -lcudart -lcupti -lcuda
+NVCC_VERSION := $(shell nvcc --version | grep -oP '(?<=release )\d+\.\d+')
+ifeq ($(shell echo "$(NVCC_VERSION) >= 11.6" | bc), 1)
+    NVCFLAGS := -arch=native
+else
+    NVCFLAGS :=
+endif
+
+NVCFLAGS += -g -ccbin='$(CC)'
+INCLUDE += -I$(PAPI_CUDA_ROOT)/include
+CUDALIBS = -L$(PAPI_CUDA_ROOT)/lib64 -lcudart -lcuda
 PAPILIB += -L../../../libpfm4/lib -lpfm
-default: $(TESTS)
+
+cuda_pw_tests: $(TESTS) $(TESTS_NOCTX)
 
 %.o:%.cu
 	$(NVCC) $(INCLUDE) $(NVCFLAGS) -c -o $@ $<

@@ -8,9 +8,7 @@
 #include "debug_comp.h"
 #include "cuda_api_config.h"
 
-char* PAPI_CUDA_ROOT_ENV;
-
-void *dl1, *dl2, *dl3;
+void *dl_cupti;
 
 // cuda driver function pointers
 CUresult ( *cuCtxGetCurrentPtr ) (CUcontext *);
@@ -79,15 +77,14 @@ CUptiResult ( *cuptiGetVersionPtr ) (uint32_t* );
         }  \
     } while (0);
 
-int get_env_papi_cuda_root(void);
-int load_cuda_sym(void);
-int load_cudart_sym(void);
-int load_cupti_common_sym(void);
+int utils_load_cuda_sym(void);
+int utils_unload_cuda_sym(void);
 
 int check_cuda_api_versions(void);
 int get_device_count(void);
 int is_gpu_perfworks(int dev_num);
 int is_mixed_compute_capability(void);
-int init_CUcontext_array(void ** pcuda_context);
+int CUcontext_array_init(void **pcuda_context);
+int CUcontext_array_free(void **pcuda_context);
 
 #endif /* __CUDA_UTILS_H__ */

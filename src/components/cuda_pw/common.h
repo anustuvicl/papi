@@ -33,9 +33,14 @@ int find_event_name(event_list_t *evt_table, const char *evt_name, event_rec_t *
 void free_event_name_list(event_list_t *evt_table);
 int tokenize_event_name(const char * name, char * nv_name, int * gpuid);
 
+// Functions to track the occupancy of gpu counters in event sets
 typedef int64_t gpu_occupancy_t;
 
 int devmask_check_and_acquire(event_list_t *evt_table);
 int devmask_release(event_list_t *evt_table);
+
+// Utility to locate a file in a given path
+#define MAX_FILES 100
+int search_files_in_path(const char* file_name, const char* search_path, char** file_paths);
 
 #endif  // __COMMON_H__

@@ -21,11 +21,13 @@ void cupti_shutdown(void)
 #if defined API_PERFWORKS
     cupti_profiler_shutdown();
 #endif
+    utils_unload_cuda_sym();
 }
 
 int cupti_init(const char **pdisabled_reason)
 {
     int retval;
+    retval = utils_load_cuda_sym();
 #if defined API_PERFWORKS
     retval = cupti_profiler_init(pdisabled_reason);
 #elif defined API_EVENTS
@@ -45,9 +47,14 @@ fn_fail:
     return PAPI_ECMP;
 }
 
-int cupti_init_cuctx_arr(void ** pcuda_context)
+int cupti_thread_info_init(void **thread_info)
 {
-    return init_CUcontext_array(pcuda_context);
+    return CUcontext_array_init(thread_info);
+}
+
+int cupti_thread_info_free(void **thread_info)
+{
+    return CUcontext_array_free(thread_info);
 }
 
 int cupti_control_create(event_list_t * event_names, int event_count, int *evt_ids, void ** pcupti_ctl, void **pcu_ctx)

@@ -2,12 +2,12 @@
  * Contain only functions related to cuda profiler API
  */
 
+#include <dlfcn.h>
 #include <papi.h>
 #include "papi_memory.h"
 #include "cuda_utils.h"
 #include "cupti_profiler.h"
 #include "debug_comp.h"
-#include <dlfcn.h>
 
 static int load_cupti_perf_sym(void);
 static int load_nvpw_sym(void);
@@ -82,37 +82,37 @@ CUptiResult ( *cuptiFinalizePtr ) (void);
         }  \
     } while (0);
 
-static void *dl4;
+static void *dl_nvpw;
 
 static int load_cupti_perf_sym(void)
 {
     COMPDBG("Entering.\n");
     int papiErr = PAPI_OK;
-    if (dl3 == NULL) {
+    if (dl_cupti == NULL) {
         ERRDBG("libcupti.so should already be loaded.\n");
         goto fn_fail;
     }
 
-    cuptiDeviceGetChipNamePtr = DLSYM_AND_CHECK(dl3, "cuptiDeviceGetChipName");
-    cuptiProfilerInitializePtr = DLSYM_AND_CHECK(dl3, "cuptiProfilerInitialize");
-    cuptiProfilerDeInitializePtr = DLSYM_AND_CHECK(dl3, "cuptiProfilerDeInitialize");
-    cuptiProfilerCounterDataImageCalculateSizePtr = DLSYM_AND_CHECK(dl3, "cuptiProfilerCounterDataImageCalculateSize");
-    cuptiProfilerCounterDataImageInitializePtr = DLSYM_AND_CHECK(dl3, "cuptiProfilerCounterDataImageInitialize");
-    cuptiProfilerCounterDataImageCalculateScratchBufferSizePtr = DLSYM_AND_CHECK(dl3, "cuptiProfilerCounterDataImageCalculateScratchBufferSize");
-    cuptiProfilerCounterDataImageInitializeScratchBufferPtr = DLSYM_AND_CHECK(dl3, "cuptiProfilerCounterDataImageInitializeScratchBuffer");
-    cuptiProfilerBeginSessionPtr = DLSYM_AND_CHECK(dl3, "cuptiProfilerBeginSession");
-    cuptiProfilerSetConfigPtr = DLSYM_AND_CHECK(dl3, "cuptiProfilerSetConfig");
-    cuptiProfilerBeginPassPtr = DLSYM_AND_CHECK(dl3, "cuptiProfilerBeginPass");
-    cuptiProfilerEnableProfilingPtr = DLSYM_AND_CHECK(dl3, "cuptiProfilerEnableProfiling");
-    cuptiProfilerPushRangePtr = DLSYM_AND_CHECK(dl3, "cuptiProfilerPushRange");
-    cuptiProfilerPopRangePtr = DLSYM_AND_CHECK(dl3, "cuptiProfilerPopRange");
-    cuptiProfilerDisableProfilingPtr = DLSYM_AND_CHECK(dl3, "cuptiProfilerDisableProfiling");
-    cuptiProfilerEndPassPtr = DLSYM_AND_CHECK(dl3, "cuptiProfilerEndPass");
-    cuptiProfilerFlushCounterDataPtr = DLSYM_AND_CHECK(dl3, "cuptiProfilerFlushCounterData");
-    cuptiProfilerUnsetConfigPtr = DLSYM_AND_CHECK(dl3, "cuptiProfilerUnsetConfig");
-    cuptiProfilerEndSessionPtr = DLSYM_AND_CHECK(dl3, "cuptiProfilerEndSession");
-    cuptiProfilerGetCounterAvailabilityPtr = DLSYM_AND_CHECK(dl3, "cuptiProfilerGetCounterAvailability");
-    cuptiFinalizePtr = DLSYM_AND_CHECK(dl3, "cuptiFinalize");
+    cuptiDeviceGetChipNamePtr = DLSYM_AND_CHECK(dl_cupti, "cuptiDeviceGetChipName");
+    cuptiProfilerInitializePtr = DLSYM_AND_CHECK(dl_cupti, "cuptiProfilerInitialize");
+    cuptiProfilerDeInitializePtr = DLSYM_AND_CHECK(dl_cupti, "cuptiProfilerDeInitialize");
+    cuptiProfilerCounterDataImageCalculateSizePtr = DLSYM_AND_CHECK(dl_cupti, "cuptiProfilerCounterDataImageCalculateSize");
+    cuptiProfilerCounterDataImageInitializePtr = DLSYM_AND_CHECK(dl_cupti, "cuptiProfilerCounterDataImageInitialize");
+    cuptiProfilerCounterDataImageCalculateScratchBufferSizePtr = DLSYM_AND_CHECK(dl_cupti, "cuptiProfilerCounterDataImageCalculateScratchBufferSize");
+    cuptiProfilerCounterDataImageInitializeScratchBufferPtr = DLSYM_AND_CHECK(dl_cupti, "cuptiProfilerCounterDataImageInitializeScratchBuffer");
+    cuptiProfilerBeginSessionPtr = DLSYM_AND_CHECK(dl_cupti, "cuptiProfilerBeginSession");
+    cuptiProfilerSetConfigPtr = DLSYM_AND_CHECK(dl_cupti, "cuptiProfilerSetConfig");
+    cuptiProfilerBeginPassPtr = DLSYM_AND_CHECK(dl_cupti, "cuptiProfilerBeginPass");
+    cuptiProfilerEnableProfilingPtr = DLSYM_AND_CHECK(dl_cupti, "cuptiProfilerEnableProfiling");
+    cuptiProfilerPushRangePtr = DLSYM_AND_CHECK(dl_cupti, "cuptiProfilerPushRange");
+    cuptiProfilerPopRangePtr = DLSYM_AND_CHECK(dl_cupti, "cuptiProfilerPopRange");
+    cuptiProfilerDisableProfilingPtr = DLSYM_AND_CHECK(dl_cupti, "cuptiProfilerDisableProfiling");
+    cuptiProfilerEndPassPtr = DLSYM_AND_CHECK(dl_cupti, "cuptiProfilerEndPass");
+    cuptiProfilerFlushCounterDataPtr = DLSYM_AND_CHECK(dl_cupti, "cuptiProfilerFlushCounterData");
+    cuptiProfilerUnsetConfigPtr = DLSYM_AND_CHECK(dl_cupti, "cuptiProfilerUnsetConfig");
+    cuptiProfilerEndSessionPtr = DLSYM_AND_CHECK(dl_cupti, "cuptiProfilerEndSession");
+    cuptiProfilerGetCounterAvailabilityPtr = DLSYM_AND_CHECK(dl_cupti, "cuptiProfilerGetCounterAvailability");
+    cuptiFinalizePtr = DLSYM_AND_CHECK(dl_cupti, "cuptiFinalize");
 
 fn_exit:
     return papiErr;
@@ -121,51 +121,135 @@ fn_fail:
     goto fn_exit;
 }
 
+static int unload_cupti_perf_sym(void)
+{
+    if (dl_cupti) {
+        dlclose(dl_cupti);
+        dl_cupti = NULL;
+    }
+    cuptiDeviceGetChipNamePtr                                  = NULL;
+    cuptiProfilerInitializePtr                                 = NULL;
+    cuptiProfilerDeInitializePtr                               = NULL;
+    cuptiProfilerCounterDataImageCalculateSizePtr              = NULL;
+    cuptiProfilerCounterDataImageInitializePtr                 = NULL;
+    cuptiProfilerCounterDataImageCalculateScratchBufferSizePtr = NULL;
+    cuptiProfilerCounterDataImageInitializeScratchBufferPtr    = NULL;
+    cuptiProfilerBeginSessionPtr                               = NULL;
+    cuptiProfilerSetConfigPtr                                  = NULL;
+    cuptiProfilerBeginPassPtr                                  = NULL;
+    cuptiProfilerEnableProfilingPtr                            = NULL;
+    cuptiProfilerPushRangePtr                                  = NULL;
+    cuptiProfilerPopRangePtr                                   = NULL;
+    cuptiProfilerDisableProfilingPtr                           = NULL;
+    cuptiProfilerEndPassPtr                                    = NULL;
+    cuptiProfilerFlushCounterDataPtr                           = NULL;
+    cuptiProfilerUnsetConfigPtr                                = NULL;
+    cuptiProfilerEndSessionPtr                                 = NULL;
+    cuptiProfilerGetCounterAvailabilityPtr                     = NULL;
+    cuptiFinalizePtr                                           = NULL;
+    return PAPI_OK;
+}
+
 static int load_nvpw_sym(void)
 {
     COMPDBG("Entering.\n");
-    int papiErr = PAPI_OK;
-    dl4 = dlopen("libnvperf_host.so", RTLD_NOW | RTLD_GLOBAL);
-    if (dl4 == NULL) {
-        ERRDBG("Loading libnvperf_host.so failed.\n");
-        goto fn_fail;
+    char dlname[] = "libnvperf_host.so";
+    char *found_files[MAX_FILES];
+    int count, i, found = 0;
+    char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
+    if (papi_cuda_root) {
+        count = search_files_in_path(dlname, papi_cuda_root, found_files);
+        for (i = 0; i < count; i++) {
+            dl_nvpw = dlopen(found_files[i], RTLD_NOW | RTLD_GLOBAL);
+            if (dl_nvpw) {
+                found = 1;
+                break;
+            }
+        }
+        for (i = 0; i < count; i++) {
+            free(found_files[i]);
+        }
+    }
+    if (!found) {
+        dl_nvpw = dlopen(dlname, RTLD_NOW | RTLD_GLOBAL);
+        if (!dl_nvpw) {
+            ERRDBG("Loading libnvperf_host.so failed.\n");
+            goto fn_fail;
+        }
     }
 
-    NVPW_GetSupportedChipNamesPtr = DLSYM_AND_CHECK(dl4, "NVPW_GetSupportedChipNames");
-    NVPW_CUDA_MetricsContext_CreatePtr = DLSYM_AND_CHECK(dl4, "NVPW_CUDA_MetricsContext_Create");
-    NVPW_MetricsContext_DestroyPtr = DLSYM_AND_CHECK(dl4, "NVPW_MetricsContext_Destroy");
-    NVPW_MetricsContext_GetMetricNames_BeginPtr = DLSYM_AND_CHECK(dl4, "NVPW_MetricsContext_GetMetricNames_Begin");
-    NVPW_MetricsContext_GetMetricNames_EndPtr = DLSYM_AND_CHECK(dl4, "NVPW_MetricsContext_GetMetricNames_End");
-    NVPW_InitializeHostPtr = DLSYM_AND_CHECK(dl4, "NVPW_InitializeHost");
-    NVPW_MetricsContext_GetMetricProperties_BeginPtr = DLSYM_AND_CHECK(dl4, "NVPW_MetricsContext_GetMetricProperties_Begin");
-    NVPW_MetricsContext_GetMetricProperties_EndPtr = DLSYM_AND_CHECK(dl4, "NVPW_MetricsContext_GetMetricProperties_End");
-    NVPW_CUDA_RawMetricsConfig_CreatePtr = DLSYM_AND_CHECK(dl4, "NVPW_CUDA_RawMetricsConfig_Create");
-    NVPW_RawMetricsConfig_DestroyPtr = DLSYM_AND_CHECK(dl4, "NVPW_RawMetricsConfig_Destroy");
-    NVPW_RawMetricsConfig_BeginPassGroupPtr = DLSYM_AND_CHECK(dl4, "NVPW_RawMetricsConfig_BeginPassGroup");
-    NVPW_RawMetricsConfig_EndPassGroupPtr = DLSYM_AND_CHECK(dl4, "NVPW_RawMetricsConfig_EndPassGroup");
-    NVPW_RawMetricsConfig_AddMetricsPtr = DLSYM_AND_CHECK(dl4, "NVPW_RawMetricsConfig_AddMetrics");
-    NVPW_RawMetricsConfig_GenerateConfigImagePtr = DLSYM_AND_CHECK(dl4, "NVPW_RawMetricsConfig_GenerateConfigImage");
-    NVPW_RawMetricsConfig_GetConfigImagePtr = DLSYM_AND_CHECK(dl4, "NVPW_RawMetricsConfig_GetConfigImage");
-    NVPW_CounterDataBuilder_CreatePtr = DLSYM_AND_CHECK(dl4, "NVPW_CounterDataBuilder_Create");
-    NVPW_CounterDataBuilder_DestroyPtr = DLSYM_AND_CHECK(dl4, "NVPW_CounterDataBuilder_Destroy");
-    NVPW_CounterDataBuilder_AddMetricsPtr = DLSYM_AND_CHECK(dl4, "NVPW_CounterDataBuilder_AddMetrics");
-    NVPW_CounterDataBuilder_GetCounterDataPrefixPtr = DLSYM_AND_CHECK(dl4, "NVPW_CounterDataBuilder_GetCounterDataPrefix");
-    NVPW_CounterData_GetNumRangesPtr = DLSYM_AND_CHECK(dl4, "NVPW_CounterData_GetNumRanges");
-    NVPW_Profiler_CounterData_GetRangeDescriptionsPtr = DLSYM_AND_CHECK(dl4, "NVPW_Profiler_CounterData_GetRangeDescriptions");
-    NVPW_MetricsContext_SetCounterDataPtr = DLSYM_AND_CHECK(dl4, "NVPW_MetricsContext_SetCounterData");
-    NVPW_MetricsContext_EvaluateToGpuValuesPtr = DLSYM_AND_CHECK(dl4, "NVPW_MetricsContext_EvaluateToGpuValues");
-    NVPW_RawMetricsConfig_GetNumPassesPtr = DLSYM_AND_CHECK(dl4, "NVPW_RawMetricsConfig_GetNumPasses");
-    NVPW_RawMetricsConfig_SetCounterAvailabilityPtr = DLSYM_AND_CHECK(dl4, "NVPW_RawMetricsConfig_SetCounterAvailability");
-    NVPW_RawMetricsConfig_IsAddMetricsPossiblePtr = DLSYM_AND_CHECK(dl4, "NVPW_RawMetricsConfig_IsAddMetricsPossible");
-    NVPW_MetricsContext_GetCounterNames_BeginPtr = DLSYM_AND_CHECK(dl4, "NVPW_MetricsContext_GetCounterNames_Begin");
-    NVPW_MetricsContext_GetCounterNames_EndPtr = DLSYM_AND_CHECK(dl4, "NVPW_MetricsContext_GetCounterNames_End");
+    NVPW_GetSupportedChipNamesPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_GetSupportedChipNames");
+    NVPW_CUDA_MetricsContext_CreatePtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_CUDA_MetricsContext_Create");
+    NVPW_MetricsContext_DestroyPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_MetricsContext_Destroy");
+    NVPW_MetricsContext_GetMetricNames_BeginPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_MetricsContext_GetMetricNames_Begin");
+    NVPW_MetricsContext_GetMetricNames_EndPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_MetricsContext_GetMetricNames_End");
+    NVPW_InitializeHostPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_InitializeHost");
+    NVPW_MetricsContext_GetMetricProperties_BeginPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_MetricsContext_GetMetricProperties_Begin");
+    NVPW_MetricsContext_GetMetricProperties_EndPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_MetricsContext_GetMetricProperties_End");
+    NVPW_CUDA_RawMetricsConfig_CreatePtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_CUDA_RawMetricsConfig_Create");
+    NVPW_RawMetricsConfig_DestroyPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_RawMetricsConfig_Destroy");
+    NVPW_RawMetricsConfig_BeginPassGroupPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_RawMetricsConfig_BeginPassGroup");
+    NVPW_RawMetricsConfig_EndPassGroupPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_RawMetricsConfig_EndPassGroup");
+    NVPW_RawMetricsConfig_AddMetricsPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_RawMetricsConfig_AddMetrics");
+    NVPW_RawMetricsConfig_GenerateConfigImagePtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_RawMetricsConfig_GenerateConfigImage");
+    NVPW_RawMetricsConfig_GetConfigImagePtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_RawMetricsConfig_GetConfigImage");
+    NVPW_CounterDataBuilder_CreatePtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_CounterDataBuilder_Create");
+    NVPW_CounterDataBuilder_DestroyPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_CounterDataBuilder_Destroy");
+    NVPW_CounterDataBuilder_AddMetricsPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_CounterDataBuilder_AddMetrics");
+    NVPW_CounterDataBuilder_GetCounterDataPrefixPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_CounterDataBuilder_GetCounterDataPrefix");
+    NVPW_CounterData_GetNumRangesPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_CounterData_GetNumRanges");
+    NVPW_Profiler_CounterData_GetRangeDescriptionsPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_Profiler_CounterData_GetRangeDescriptions");
+    NVPW_MetricsContext_SetCounterDataPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_MetricsContext_SetCounterData");
+    NVPW_MetricsContext_EvaluateToGpuValuesPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_MetricsContext_EvaluateToGpuValues");
+    NVPW_RawMetricsConfig_GetNumPassesPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_RawMetricsConfig_GetNumPasses");
+    NVPW_RawMetricsConfig_SetCounterAvailabilityPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_RawMetricsConfig_SetCounterAvailability");
+    NVPW_RawMetricsConfig_IsAddMetricsPossiblePtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_RawMetricsConfig_IsAddMetricsPossible");
+    NVPW_MetricsContext_GetCounterNames_BeginPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_MetricsContext_GetCounterNames_Begin");
+    NVPW_MetricsContext_GetCounterNames_EndPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_MetricsContext_GetCounterNames_End");
 
-fn_exit:
-    return papiErr;
+    Dl_info info;
+    dladdr(NVPW_GetSupportedChipNamesPtr, &info);
+    LOGDBG("NVPW library loaded from %s\n", info.dli_fname);
+    return PAPI_OK;
 fn_fail:
-    papiErr = PAPI_ENOSUPP;
-    goto fn_exit;
+    return PAPI_ENOSUPP;
+}
 
+static int unload_nvpw_sym(void)
+{
+    if (dl_nvpw) {
+        dlclose(dl_nvpw);
+        dl_nvpw = NULL;
+    }
+    NVPW_GetSupportedChipNamesPtr                     = NULL;
+    NVPW_CUDA_MetricsContext_CreatePtr                = NULL;
+    NVPW_MetricsContext_DestroyPtr                    = NULL;
+    NVPW_MetricsContext_GetMetricNames_BeginPtr       = NULL;
+    NVPW_MetricsContext_GetMetricNames_EndPtr         = NULL;
+    NVPW_InitializeHostPtr                            = NULL;
+    NVPW_MetricsContext_GetMetricProperties_BeginPtr  = NULL;
+    NVPW_MetricsContext_GetMetricProperties_EndPtr    = NULL;
+    NVPW_CUDA_RawMetricsConfig_CreatePtr              = NULL;
+    NVPW_RawMetricsConfig_DestroyPtr                  = NULL;
+    NVPW_RawMetricsConfig_BeginPassGroupPtr           = NULL;
+    NVPW_RawMetricsConfig_EndPassGroupPtr             = NULL;
+    NVPW_RawMetricsConfig_AddMetricsPtr               = NULL;
+    NVPW_RawMetricsConfig_GenerateConfigImagePtr      = NULL;
+    NVPW_RawMetricsConfig_GetConfigImagePtr           = NULL;
+    NVPW_CounterDataBuilder_CreatePtr                 = NULL;
+    NVPW_CounterDataBuilder_DestroyPtr                = NULL;
+    NVPW_CounterDataBuilder_AddMetricsPtr             = NULL;
+    NVPW_CounterDataBuilder_GetCounterDataPrefixPtr   = NULL;
+    NVPW_CounterData_GetNumRangesPtr                  = NULL;
+    NVPW_Profiler_CounterData_GetRangeDescriptionsPtr = NULL;
+    NVPW_MetricsContext_SetCounterDataPtr             = NULL;
+    NVPW_MetricsContext_EvaluateToGpuValuesPtr        = NULL;
+    NVPW_RawMetricsConfig_GetNumPassesPtr             = NULL;
+    NVPW_RawMetricsConfig_SetCounterAvailabilityPtr   = NULL;
+    NVPW_RawMetricsConfig_IsAddMetricsPossiblePtr     = NULL;
+    NVPW_MetricsContext_GetCounterNames_BeginPtr      = NULL;
+    NVPW_MetricsContext_GetCounterNames_EndPtr        = NULL;
+    return PAPI_OK;
 }
 
 static int initialize_cupti_profiler_api(void)
@@ -178,6 +262,15 @@ static int initialize_cupti_profiler_api(void)
         return PAPI_ESYS;  // or something else?
 }
 
+static int deinitialize_cupti_profiler_api(void)
+{
+    COMPDBG("Entering.\n");
+    CUpti_Profiler_DeInitialize_Params profilerDeInitializeParams = {CUpti_Profiler_DeInitialize_Params_STRUCT_SIZE, NULL };
+    if (cuptiProfilerDeInitializePtr(&profilerDeInitializeParams) == CUPTI_SUCCESS)
+        return PAPI_OK;
+    else
+        return PAPI_ESYS;
+}
 static int initialize_perfworks_api(void)
 {
     COMPDBG("Entering.\n");
@@ -1094,11 +1187,13 @@ fn_exit:
     return res;
 }
 
-static void free_all_enumerated_metrics()
+static void free_all_enumerated_metrics(void)
 {
     COMPDBG("Entering.\n");
     int gpu_id, found;
     NVPW_MetricsContext_Destroy_Params metricsContextDestroyParams;
+    if (avail_events == NULL)
+        return;
     for (gpu_id=0; gpu_id<num_gpus; gpu_id++) {
         found = find_same_chipname(gpu_id);
         if (found > -1) {
@@ -1118,6 +1213,7 @@ static void free_all_enumerated_metrics()
             free_event_name_list(avail_events[gpu_id].nv_metrics);
     }
     free(avail_events);
+    avail_events = NULL;
 }
 
 // CUPTI Profiler component API functions
@@ -1125,15 +1221,8 @@ int cupti_profiler_init(const char ** pdisabled_reason)
 {
     COMPDBG("Entering.\n");
     int retval = PAPI_OK;
-    retval = get_env_papi_cuda_root();
-    if (retval != PAPI_OK) {
-        *pdisabled_reason = "Environment variable PAPI_CUDA_ROOT not set.";
-        goto fn_fail;
-    }
-    retval = load_cuda_sym();
-    retval += load_cudart_sym();
-    retval += load_cupti_common_sym();
-    retval += load_cupti_perf_sym();
+
+    retval = load_cupti_perf_sym();
     retval += load_nvpw_sym();
     if (retval != PAPI_OK) {
         *pdisabled_reason = "Unable to load CUDA library functions.";
@@ -1390,4 +1479,7 @@ void cupti_profiler_shutdown(void)
 {
     COMPDBG("Entering.\n");
     free_all_enumerated_metrics();
+    deinitialize_cupti_profiler_api();
+    unload_nvpw_sym();
+    unload_cupti_perf_sym();
 }

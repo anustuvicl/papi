@@ -55,9 +55,6 @@
 
 // CUDA runtime
 #include <cuda.h>
-#include <cuda_runtime.h>
-#include <cuda_runtime_api.h>
-#include <cupti.h>
 #include <timer.h>
 
 #include "papi.h"
@@ -65,10 +62,6 @@
 
 #if not defined PAPI
 #undef PAPI
-#endif
-
-#if not defined CUPTI_ONLY
-#undef CUPTI_ONLY
 #endif
 
 #ifndef MAX
@@ -183,9 +176,6 @@ int main( int argc, char **argv )
             break;
         }
     }
-    uint32_t cupti_linked_version;
-    cuptiGetVersion( &cupti_linked_version );
-    printf("CUPTI version: Compiled against version %d; Linked against version %d\n", CUPTI_API_VERSION, cupti_linked_version );
 
     printf( "Generating input data...\n" );
 
@@ -381,10 +371,6 @@ int main( int argc, char **argv )
         // Shut down this GPU
         CHECK_CUDA_ERROR( cudaStreamDestroy( plan[i].stream ) );
     }
-
-#ifdef CUPTI_ONLY
-    free(myevent);
-#endif 
 
     exit( ( diff < 1e-5 ) ? EXIT_SUCCESS : EXIT_FAILURE );
 }

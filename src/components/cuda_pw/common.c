@@ -153,3 +153,32 @@ int devmask_release(event_list_t *evt_table)
     global_gpu_bitmask ^= bitmask;
     return PAPI_OK;
 }
+
+int search_files_in_path(const char* file_name, const char* search_path, char** file_paths)
+{
+    char path[PATH_MAX];
+    char command[PATH_MAX];
+    snprintf(command, PATH_MAX, "find %s -name %s", search_path, file_name);
+
+    FILE *fp;
+    fp = popen(command, "r");
+    if (fp == NULL) {
+        ERRDBG("Failed to run system command find using popen.\n");
+        return -1;
+    }
+
+    int count = 0;
+    while (fgets(path, PATH_MAX, fp) != NULL) {
+        path[strcspn(path, "\n")] = 0;
+        file_paths[count] = strdup(path);
+        count++;
+        if (count >= MAX_FILES) {
+            break;
+        }
+    }
+
+    pclose(fp);
+    if (count == 0)
+        ERRDBG("%s not found in path PAPI_CUDA_ROOT.\n", file_name);
+    return count;
+}
