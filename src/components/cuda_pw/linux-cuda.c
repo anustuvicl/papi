@@ -408,8 +408,12 @@ fn_exit:
     return res;
 }
 
-static int cuda_reset(hwd_context_t __attribute__((unused)) *ctx, hwd_control_state_t __attribute__((unused)) *ctl)
+static int cuda_reset(hwd_context_t __attribute__((unused)) *ctx, hwd_control_state_t *ctl)
 {
-    return PAPI_OK;
+    struct cuda_ctl * control = (struct cuda_ctl *) ctl;
+    int i;
+    for (i = 0; i < control->events_count; i++) {
+        control->values[i] = 0;
+    }
+    return cupti_control_reset( &(control->cupti_ctl) );
 }
-

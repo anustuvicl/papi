@@ -562,15 +562,25 @@ fn_exit:
 static int get_counter_availability(struct cupti_gpu_control_s *ctl, CUcontext ctx)
 {
     int res;
+    CUcontext userCtx;
+    CUDA_CALL(cuCtxGetCurrentPtr(&userCtx), return PAPI_ENOSUPP);
+    if (userCtx == NULL) {
+        CUDART_CALL(cudaFreePtr(NULL), return PAPI_ENOSUPP);
+        CUDA_CALL(cuCtxGetCurrentPtr(&userCtx), return PAPI_ENOSUPP);
+    }
+    CUDA_CALL(cuCtxSetCurrentPtr(ctx), return PAPI_ENOSUPP);
     // Get size of counterAvailabilityImage - in first pass, GetCounterAvailability return size needed for data
     CUpti_Profiler_GetCounterAvailability_Params getCounterAvailabilityParams = {
         .structSize = CUpti_Profiler_GetCounterAvailability_Params_STRUCT_SIZE,
         .pPriv = NULL,
-        .ctx = ctx
+        .ctx = NULL,
+        .pCounterAvailabilityImage = NULL,
     };
     res = cuptiProfilerGetCounterAvailabilityPtr(&getCounterAvailabilityParams);
-    if (res != CUPTI_SUCCESS)
+    if (res != CUPTI_SUCCESS) {
+        ERRDBG("CUPTI error %d: Failed to get size.\n", res);
         return PAPI_ENOSUPP;
+    }
     // Allocate sized counterAvailabilityImage
     ctl->counterAvailabilityImage.size = getCounterAvailabilityParams.counterAvailabilityImageSize;
     ctl->counterAvailabilityImage.data = (uint8_t *) papi_malloc(ctl->counterAvailabilityImage.size);
@@ -578,8 +588,11 @@ static int get_counter_availability(struct cupti_gpu_control_s *ctl, CUcontext c
     // Initialize counterAvailabilityImage
     getCounterAvailabilityParams.pCounterAvailabilityImage = ctl->counterAvailabilityImage.data;
     res = cuptiProfilerGetCounterAvailabilityPtr(&getCounterAvailabilityParams);
-    if (res != CUPTI_SUCCESS)
+    if (res != CUPTI_SUCCESS) {
+        ERRDBG("CUPTI error %d: Failed to get bytes.\n", res);
         return PAPI_ENOSUPP;
+    }
+    CUDA_CALL(cuCtxSetCurrentPtr(userCtx), return PAPI_ENOSUPP);
     return PAPI_OK;
 }
 
@@ -1473,6 +1486,14 @@ int cupti_profiler_control_read(void **pctl, long long *values)
     }
     state->read_count++;
     return res;
+}
+
+int cupti_profiler_control_reset(void **pctl)
+{
+    COMPDBG("Entering.\n");
+    struct cupti_profiler_control_s * state = (struct cupti_profiler_control_s *) (*pctl);
+    state->read_count = 0;
+    return PAPI_OK;
 }
 
 void cupti_profiler_shutdown(void)

@@ -4,7 +4,7 @@
 // Logging facility
 
 // Control panel
-#define COMP_DEBUG
+// #define COMP_DEBUG
 #define LOG_GENERAL
 #define LOG_COMP_CALLS
 #define LOG_CUDA_CALLS

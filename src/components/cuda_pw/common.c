@@ -178,7 +178,8 @@ int search_files_in_path(const char* file_name, const char* search_path, char** 
     }
 
     pclose(fp);
-    if (count == 0)
+    if (count == 0) {
         ERRDBG("%s not found in path PAPI_CUDA_ROOT.\n", file_name);
+    }
     return count;
 }

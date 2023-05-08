@@ -101,7 +101,12 @@ int cupti_control_read(void *pcupti_ctl, long long *values)
 #endif
 }
 
-int cupti_control_reset(void *pcupti_ctl);
+int cupti_control_reset(void *pcupti_ctl)
+{
+#if defined API_PERFWORKS
+    return cupti_profiler_control_reset(pcupti_ctl);
+#endif
+}
 
 int cupti_enumerate_all_events(event_list_t *all_evt_names)
 {
