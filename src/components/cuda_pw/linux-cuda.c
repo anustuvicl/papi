@@ -134,7 +134,10 @@ static int cuda_init_private(void)
     const char *disabled_reason;
     COMPDBG("Entering.\n");
     res = cupti_init(&disabled_reason);
-    if (res != PAPI_OK) {
+    if (res != PAPI_OK)
+    {
+        sprintf(_cuda_pw_vector.cmp_info.disabled_reason, disabled_reason);
+        _cuda_pw_vector.cmp_info.disabled = res;
         goto fn_exit;
     }
 

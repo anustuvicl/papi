@@ -7,7 +7,7 @@
 
 // CUPTI Events component API functions
 
-int cupti_events_init(char ** pdisabled_reason)
+int cupti_events_init(char **pdisabled_reason)
 {
     *pdisabled_reason = "CUDA events API not implemented.";
     return PAPI_ECMP;

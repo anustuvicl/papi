@@ -262,7 +262,7 @@ int main( int argc, char **argv )
         for ( ee=0; ee<numEventNames; ee++ ) {
             CHECK_CUDA_ERROR(cudaSetDevice(device[i]));
             // Create a device specific event.
-            snprintf( tmpEventName, 64, "%s:device=%d\0", EventNames[ee], i );
+            snprintf( tmpEventName, 64, "%s:device=%d", EventNames[ee], i );
             retval = PAPI_add_named_event( EventSet, tmpEventName );
             if (retval==PAPI_OK) {
                 printf( "Add event success: '%s' GPU %i\n", tmpEventName, i );

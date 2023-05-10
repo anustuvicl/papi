@@ -18,12 +18,6 @@
 #       define API_PERFWORKS 1
 #       define API_ERROR 0
 
-// Include these files if CUDA profiler API
-#       include <cupti_target.h>
-#       include <cupti_profiler_target.h>
-#       include <nvperf_host.h>
-#       include <nvperf_cuda_host.h>
-#       include <nvperf_target.h>
 #   endif
 
 #   if CUPTI_API_VERSION < 17 && CUDA_VERSION <= 11700

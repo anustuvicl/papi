@@ -23,7 +23,6 @@ int test_PAPI_add_named_event(int *EventSet) {
     }
     if (res == PAPI_EMULPASS)
         return PASS;           // Test pass condition
-fail:
     return FAIL;
 }
 

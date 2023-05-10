@@ -5,6 +5,13 @@
 #include <dlfcn.h>
 #include <papi.h>
 #include "papi_memory.h"
+
+#include <cupti_target.h>
+#include <cupti_profiler_target.h>
+#include <nvperf_host.h>
+#include <nvperf_cuda_host.h>
+#include <nvperf_target.h>
+
 #include "cuda_utils.h"
 #include "cupti_profiler.h"
 #include "debug_comp.h"
@@ -371,7 +378,7 @@ static int retrieve_metric_details(struct NVPA_MetricsContext *pMetricsContext, 
         return PAPI_EINVAL;
     }
 
-    for (num_dep=0; getMetricPropertiesBeginParams.ppRawMetricDependencies[num_dep] != NULL; num_dep++);
+    for (num_dep=0; getMetricPropertiesBeginParams.ppRawMetricDependencies[num_dep] != NULL; num_dep++){;}
 
     rmr = (NVPA_RawMetricRequest *) papi_calloc(num_dep, sizeof(NVPA_RawMetricRequest));
     if (rmr == NULL) {
@@ -559,16 +566,9 @@ fn_exit:
     return res;
 }
 
-static int get_counter_availability(struct cupti_gpu_control_s *ctl, CUcontext ctx)
+static int get_counter_availability(struct cupti_gpu_control_s *ctl)
 {
     int res;
-    CUcontext userCtx;
-    CUDA_CALL(cuCtxGetCurrentPtr(&userCtx), return PAPI_ENOSUPP);
-    if (userCtx == NULL) {
-        CUDART_CALL(cudaFreePtr(NULL), return PAPI_ENOSUPP);
-        CUDA_CALL(cuCtxGetCurrentPtr(&userCtx), return PAPI_ENOSUPP);
-    }
-    CUDA_CALL(cuCtxSetCurrentPtr(ctx), return PAPI_ENOSUPP);
     // Get size of counterAvailabilityImage - in first pass, GetCounterAvailability return size needed for data
     CUpti_Profiler_GetCounterAvailability_Params getCounterAvailabilityParams = {
         .structSize = CUpti_Profiler_GetCounterAvailability_Params_STRUCT_SIZE,
@@ -592,7 +592,6 @@ static int get_counter_availability(struct cupti_gpu_control_s *ctl, CUcontext c
         ERRDBG("CUPTI error %d: Failed to get bytes.\n", res);
         return PAPI_ENOSUPP;
     }
-    CUDA_CALL(cuCtxSetCurrentPtr(userCtx), return PAPI_ENOSUPP);
     return PAPI_OK;
 }
 
@@ -809,15 +808,12 @@ static int reset_cupti_prof_config_images(struct cupti_gpu_control_s *ctl)
     return PAPI_OK;
 }
 
-static int begin_profiling(struct cupti_gpu_control_s *ctl, CUcontext cuctx)
+static int begin_profiling(struct cupti_gpu_control_s *ctl)
 {
     COMPDBG("Entering.\n");
     byte_array_t *configImage = &(ctl->configImage);
     byte_array_t *counterDataScratchBuffer = &(ctl->counterDataScratchBuffer);
     byte_array_t *counterDataImage = &(ctl->counterDataImage);
-
-    CUDA_CALL( cuCtxSetCurrentPtr(cuctx), return PAPI_ECMP );
-    LOGDBG("dev = %d has current ctx = %p.\n", ctl->gpu_id, cuctx);
 
     CUpti_Profiler_BeginSession_Params beginSessionParams = {
         .structSize = CUpti_Profiler_BeginSession_Params_STRUCT_SIZE,
@@ -876,12 +872,11 @@ static int begin_profiling(struct cupti_gpu_control_s *ctl, CUcontext cuctx)
     return PAPI_OK;
 }
 
-static int end_profiling(struct cupti_gpu_control_s *ctl, CUcontext cuctx)
+static int end_profiling(struct cupti_gpu_control_s *ctl)
 {
 
-    COMPDBG("EndProfiling. dev = %d ctx = %p\n", ctl->gpu_id, cuctx);
+    COMPDBG("EndProfiling. dev = %d\n", ctl->gpu_id);
     (void) ctl;
-    CUDA_CALL( cuCtxSetCurrentPtr(cuctx), return PAPI_ECMP );
 
     CUpti_Profiler_DisableProfiling_Params disableProfilingParams = {
         .structSize = CUpti_Profiler_DisableProfiling_Params_STRUCT_SIZE,
@@ -1241,22 +1236,13 @@ int cupti_profiler_init(const char ** pdisabled_reason)
         *pdisabled_reason = "Unable to load CUDA library functions.";
         goto fn_fail;
     }
-    retval = check_cuda_api_versions();
-    if (retval == PAPI_ECMP) {
-        *pdisabled_reason = "CUDA library included vs linked versions mismatch.";
-        goto fn_fail;
-    }
-    else if (retval == PAPI_ENOSUPP) {
-        *pdisabled_reason = "CUDA driver version older than runtime version.";
-        goto fn_fail;
-    }
     retval = get_device_count();
     if (retval <= 0) {
         *pdisabled_reason = "No GPUs found on system.";
         goto fn_fail;
     }
     num_gpus = retval;
-    if (is_mixed_compute_capability() != PAPI_OK) {
+    if (util_gpu_collection_kind() == GPU_COLLECTION_MIXED) {
         *pdisabled_reason = "Mixed compute capability not supported.";
         goto fn_fail;
     }
@@ -1269,6 +1255,11 @@ int cupti_profiler_init(const char ** pdisabled_reason)
     retval = init_all_metrics();
     if (retval != PAPI_OK)
         goto fn_fail;
+    retval = cuInitPtr(0);
+    if (retval != CUDA_SUCCESS) {
+        *pdisabled_reason = "Failed to initialize CUDA driver API.";
+        goto fn_fail;
+    }
     return PAPI_OK;
 fn_fail:
     return PAPI_ECMP;
@@ -1355,6 +1346,12 @@ int cupti_profiler_start(void **pctl, void **pcu_ctx)
     struct cupti_profiler_control_s * state = (struct cupti_profiler_control_s *) (*pctl);
     struct cupti_gpu_control_s *ctl;
     CUcontext * cu_ctx = (CUcontext *) (*pcu_ctx);
+    CUcontext userCtx;
+    CUDA_CALL(cuCtxGetCurrentPtr(&userCtx), return PAPI_ENOSUPP);
+    if (userCtx == NULL) {
+        CUDART_CALL(cudaFreePtr(NULL), return PAPI_ENOSUPP);
+        CUDA_CALL(cuCtxGetCurrentPtr(&userCtx), return PAPI_ENOSUPP);
+    }
     int gpu_id;
     char chip_name[32];
     int res = PAPI_OK;
@@ -1373,7 +1370,8 @@ int cupti_profiler_start(void **pctl, void **pcu_ctx)
             ERRDBG("Failed to get chipname.\n");
             goto fn_fail;
         }
-        res = get_counter_availability(ctl, cu_ctx[gpu_id]);
+        CUDA_CALL(cuCtxSetCurrentPtr(cu_ctx[gpu_id]), return PAPI_ENOSUPP);
+        res = get_counter_availability(ctl);
         if (res != PAPI_OK) {
             ERRDBG("Error getting counter availability image.\n");
             return res;
@@ -1388,15 +1386,17 @@ int cupti_profiler_start(void **pctl, void **pcu_ctx)
         }
         LOGDBG("%d\t%d\t%d\n", ctl->configImage.size, ctl->counterDataScratchBuffer.size,
                                ctl->counterDataImage.size);
-        res = begin_profiling(ctl, cu_ctx[gpu_id]);
+        res = begin_profiling(ctl);
         if (res != PAPI_OK) {
             ERRDBG("Failed to start profiling for gpu %d\n", gpu_id);
             goto fn_fail;
         }
     }
     state->running = True;
+    CUDA_CALL(cuCtxSetCurrentPtr(userCtx), return PAPI_ENOSUPP);
     return PAPI_OK;
 fn_fail:
+    CUDA_CALL(cuCtxSetCurrentPtr(userCtx), return PAPI_ENOSUPP);
     return PAPI_ECMP;
 }
 
@@ -1406,6 +1406,12 @@ int cupti_profiler_stop(void **pctl, void **pcu_ctx)
     struct cupti_profiler_control_s * state = (struct cupti_profiler_control_s *) (*pctl);
     struct cupti_gpu_control_s *ctl;
     CUcontext * cu_ctx = (CUcontext *) (*pcu_ctx);
+    CUcontext userCtx;
+    CUDA_CALL(cuCtxGetCurrentPtr(&userCtx), return PAPI_ENOSUPP);
+    if (userCtx == NULL) {
+        CUDART_CALL(cudaFreePtr(NULL), return PAPI_ENOSUPP);
+        CUDA_CALL(cuCtxGetCurrentPtr(&userCtx), return PAPI_ENOSUPP);
+    }
     int gpu_id;
     int res = PAPI_OK;
     if (state->running == False) {
@@ -1416,7 +1422,8 @@ int cupti_profiler_stop(void **pctl, void **pcu_ctx)
         ctl = &(state->ctl[gpu_id]);
         if (ctl->event_names.count == 0)
             continue;
-        res = end_profiling(ctl, cu_ctx[gpu_id]);
+        CUDA_CALL(cuCtxSetCurrentPtr(cu_ctx[gpu_id]), return PAPI_ENOSUPP);
+        res = end_profiling(ctl);
         if (res != PAPI_OK) {
             ERRDBG("Failed to stop profiling on gpu %d\n", gpu_id);
             goto fn_fail;
@@ -1426,8 +1433,10 @@ int cupti_profiler_stop(void **pctl, void **pcu_ctx)
             goto fn_fail;
     }
     state->running = False;
+    CUDA_CALL(cuCtxSetCurrentPtr(userCtx), return PAPI_ENOSUPP);
     return res;
 fn_fail:
+    CUDA_CALL(cuCtxSetCurrentPtr(userCtx), return PAPI_ENOSUPP);
     return PAPI_ECMP;
 }
 

@@ -8,6 +8,36 @@
 
 static void *dl_drv, *dl_rt;
 
+void *dl_cupti;
+
+CUresult ( *cuCtxGetCurrentPtr ) (CUcontext *);
+CUresult ( *cuCtxSetCurrentPtr ) (CUcontext);
+CUresult ( *cuCtxDestroyPtr ) (CUcontext);
+CUresult ( *cuCtxCreatePtr ) (CUcontext *pctx, unsigned int flags, CUdevice dev);
+CUresult ( *cuCtxGetDevicePtr ) (CUdevice *);
+CUresult ( *cuDeviceGetPtr ) (CUdevice *, int);
+CUresult ( *cuDeviceGetCountPtr ) (int *);
+CUresult ( *cuDeviceGetNamePtr ) (char *, int, CUdevice);
+CUresult ( *cuDevicePrimaryCtxRetainPtr ) (CUcontext *pctx, CUdevice);
+CUresult ( *cuDevicePrimaryCtxReleasePtr ) (CUdevice);
+CUresult ( *cuInitPtr ) (unsigned int);
+CUresult ( *cuGetErrorStringPtr ) (CUresult error, const char** pStr);
+CUresult ( *cuCtxPopCurrentPtr ) (CUcontext * pctx);
+CUresult ( *cuCtxPushCurrentPtr ) (CUcontext pctx);
+CUresult ( *cuCtxSynchronizePtr ) ();
+CUresult ( *cuDeviceGetAttributePtr ) (int *, CUdevice_attribute, CUdevice);
+
+cudaError_t ( *cudaGetDeviceCountPtr ) (int *);
+cudaError_t ( *cudaGetDevicePtr ) (int *);
+cudaError_t ( *cudaSetDevicePtr ) (int);
+cudaError_t ( *cudaGetDevicePropertiesPtr ) (struct cudaDeviceProp* prop, int  device);
+cudaError_t ( *cudaDeviceGetAttributePtr ) (int *value, enum cudaDeviceAttr attr, int device);
+cudaError_t ( *cudaFreePtr ) (void *);
+cudaError_t ( *cudaDriverGetVersionPtr ) (int *);
+cudaError_t ( *cudaRuntimeGetVersionPtr ) (int *);
+
+CUptiResult ( *cuptiGetVersionPtr ) (uint32_t* );
+
 static int load_cuda_sym(void)
 {
     dl_drv = dlopen("libcuda.so", RTLD_NOW | RTLD_GLOBAL);
@@ -173,19 +203,21 @@ static int unload_cupti_common_sym(void)
     return PAPI_OK;
 }
 
-int utils_load_cuda_sym(void)
+int util_load_cuda_sym(const char **pdisabled_reason)
 {
     int res;
     res = load_cuda_sym();
     res += load_cudart_sym();
     res += load_cupti_common_sym();
-    if (res != PAPI_OK)
+    if (res != PAPI_OK) {
+        *pdisabled_reason = "Unable to load CUDA library functions.";
         return PAPI_ESYS;
+    }
     else
         return PAPI_OK;
 }
 
-int utils_unload_cuda_sym(void)
+int util_unload_cuda_sym(void)
 {
     unload_cuda_sym();
     unload_cudart_sym();
@@ -193,18 +225,25 @@ int utils_unload_cuda_sym(void)
     return PAPI_OK;
 }
 
-int check_cuda_api_versions(void)
+static int util_dylib_cu_driver_version(void)
 {
-    int runtimeversion, driverversion;
-    unsigned int cuptiversion;
-    CUDART_CALL(cudaRuntimeGetVersionPtr(&runtimeversion), return PAPI_ENOSUPP );
-    CUDART_CALL(cudaDriverGetVersionPtr(&driverversion), return PAPI_ENOSUPP );
-    CUPTI_CALL(cuptiGetVersionPtr(&cuptiversion), return PAPI_ENOSUPP );
-    // if (runtimeversion != CUDA_VERSION || cuptiversion != CUPTI_API_VERSION)
-        // return PAPI_ECMP;
-    if (driverversion < runtimeversion)
-        return PAPI_ESYS;
-    return PAPI_OK;
+    int driverVersion;
+    CUDART_CALL(cudaDriverGetVersionPtr(&driverVersion), return PAPI_ENOSUPP );
+    return driverVersion;
+}
+
+static int util_dylib_cu_runtime_version(void)
+{
+    int runtimeVersion;
+    CUDART_CALL(cudaRuntimeGetVersionPtr(&runtimeVersion), return PAPI_ENOSUPP );
+    return runtimeVersion;
+}
+
+static int util_dylib_cupti_version(void)
+{
+    unsigned int cuptiVersion;
+    CUPTI_CALL(cuptiGetVersionPtr(&cuptiVersion), return PAPI_ENOSUPP );
+    return cuptiVersion;
 }
 
 int get_device_count(void)
@@ -214,7 +253,7 @@ int get_device_count(void)
     return numDevs;
 }
 
-int is_gpu_perfworks(int dev_num)
+static int get_gpu_compute_capability(int dev_num)
 {
     int cc_major, cc_minor;
     int cc;
@@ -225,27 +264,49 @@ int is_gpu_perfworks(int dev_num)
         cudaDevAttrComputeCapabilityMinor, dev_num),
             return PAPI_ENOSUPP );
     cc = cc_major * 10 + cc_minor;
-    if (cc >= 70)
-        return PAPI_OK;
-    else
-        return PAPI_ENOSUPP;
+    return cc;
 }
 
-int is_mixed_compute_capability(void)
+enum gpu_collection_e util_gpu_collection_kind(void)
 {
     int total_gpus = get_device_count();
-    int i, count=0;
+    int i, cc;
+    int count_perf = 0, count_evt = 0;
     for (i=0; i<total_gpus; i++) {
-        if (is_gpu_perfworks(i) == PAPI_OK)
-            count++;
+        cc = get_gpu_compute_capability(i);
+        if (cc >= 70) {
+            count_perf ++;
+        } else if (cc <= 70) {
+            count_evt ++;
+        }
     }
-    if (count == total_gpus)
-        return PAPI_OK;
-    else
-        return PAPI_ENOSUPP;
+    if (count_perf == total_gpus) {
+        return GPU_COLLECTION_ALL_PERF;
+    } else if (count_evt == total_gpus) {
+        return GPU_COLLECTION_ALL_EVENTS;
+    } else {
+        return GPU_COLLECTION_MIXED;
+    }
 }
 
-int CUcontext_array_init(void ** pcuda_context)
+int util_runtime_is_perfworks_api(void)
+{
+    if (util_dylib_cu_runtime_version() >= 11000 && util_dylib_cupti_version() >= 13 &&
+        util_gpu_collection_kind() == GPU_COLLECTION_ALL_PERF)
+        return 1;
+    else
+        return 0;
+}
+
+int util_runtime_is_events_api(void)
+{
+    if (util_dylib_cu_runtime_version() < 11000 && util_gpu_collection_kind() == GPU_COLLECTION_ALL_EVENTS)
+        return 1;
+    else
+        return 0;
+}
+
+int cucontext_array_init(void **pcuda_context)
 {
     COMPDBG("Entering.\n");
     CUcontext *cuCtx = (CUcontext *) papi_calloc (get_device_count(), sizeof(CUcontext));
@@ -256,7 +317,7 @@ int CUcontext_array_init(void ** pcuda_context)
     return PAPI_OK;
 }
 
-int CUcontext_array_free(void **pcuda_context)
+int cucontext_array_free(void **pcuda_context)
 {
     free(*pcuda_context);
     *pcuda_context = NULL;

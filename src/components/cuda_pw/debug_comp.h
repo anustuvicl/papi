@@ -64,6 +64,7 @@
 
 #   ifdef LOG_THREAD_INFO
 #       undef THR_INFO
+#       include <papi.h>
 #       include "papi_internal.h"
 #       define THR_INFO fprintf(stderr, "THR %lu: ", (_papi_hwi_thread_id_fn != NULL) ? _papi_hwi_thread_id_fn() : 0);
 #   endif  // LOG_THREAD_INFO
