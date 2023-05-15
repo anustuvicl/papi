@@ -82,7 +82,7 @@ extern CUptiResult ( *cuptiGetVersionPtr ) (uint32_t* );
 int util_load_cuda_sym(const char **pdisabled_reason);
 int util_unload_cuda_sym(void);
 
-enum gpu_collection_e {GPU_COLLECTION_ALL_PERF, GPU_COLLECTION_MIXED, GPU_COLLECTION_ALL_EVENTS};
+enum gpu_collection_e {GPU_COLLECTION_ALL_PERF, GPU_COLLECTION_MIXED, GPU_COLLECTION_ALL_EVENTS, GPU_COLLECTION_ALL_CC70};
 
 int get_device_count(void);
 enum gpu_collection_e util_gpu_collection_kind(void);

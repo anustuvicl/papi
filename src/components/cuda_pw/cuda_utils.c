@@ -3,6 +3,7 @@
 #include <papi.h>
 #include "papi_memory.h"
 
+#include "cuda_api_config.h"
 #include "cuda_utils.h"
 #include "common.h"
 
@@ -225,13 +226,6 @@ int util_unload_cuda_sym(void)
     return PAPI_OK;
 }
 
-static int util_dylib_cu_driver_version(void)
-{
-    int driverVersion;
-    CUDART_CALL(cudaDriverGetVersionPtr(&driverVersion), return PAPI_ENOSUPP );
-    return driverVersion;
-}
-
 static int util_dylib_cu_runtime_version(void)
 {
     int runtimeVersion;
@@ -271,28 +265,47 @@ enum gpu_collection_e util_gpu_collection_kind(void)
 {
     int total_gpus = get_device_count();
     int i, cc;
-    int count_perf = 0, count_evt = 0;
+    int count_perf = 0, count_evt = 0, count_cc70 = 0;
     for (i=0; i<total_gpus; i++) {
         cc = get_gpu_compute_capability(i);
-        if (cc >= 70) {
-            count_perf ++;
-        } else if (cc <= 70) {
-            count_evt ++;
+        if (cc == 70) {
+            ++count_cc70;
         }
+        if (cc >= 70) {
+            ++count_perf;
+        }
+        if (cc <= 70) {
+            ++count_evt;
+        }
+    }
+    if (count_cc70 == total_gpus) {
+        return GPU_COLLECTION_ALL_CC70;
     }
     if (count_perf == total_gpus) {
         return GPU_COLLECTION_ALL_PERF;
-    } else if (count_evt == total_gpus) {
-        return GPU_COLLECTION_ALL_EVENTS;
-    } else {
-        return GPU_COLLECTION_MIXED;
     }
+    if (count_evt == total_gpus) {
+        return GPU_COLLECTION_ALL_EVENTS;
+    }
+    return GPU_COLLECTION_MIXED;
 }
 
 int util_runtime_is_perfworks_api(void)
 {
-    if (util_dylib_cu_runtime_version() >= 11000 && util_dylib_cupti_version() >= 13 &&
-        util_gpu_collection_kind() == GPU_COLLECTION_ALL_PERF)
+    enum gpu_collection_e gpus_kind = util_gpu_collection_kind();
+    unsigned int cuptiVersion = util_dylib_cupti_version();
+
+    if (gpus_kind == GPU_COLLECTION_ALL_CC70 && 
+        (cuptiVersion == CUPTI_PROFILER_API_MIN_SUPPORTED_VERSION || util_dylib_cu_runtime_version() == 11000))
+    {
+#if defined(PAPI_CUDA_110_CC_70_PERFWORKS_API)
+        return 1;
+#else
+        return 0;
+#endif
+    }
+    if ((gpus_kind == GPU_COLLECTION_ALL_PERF || gpus_kind == GPU_COLLECTION_ALL_CC70)
+        && cuptiVersion >= CUPTI_PROFILER_API_MIN_SUPPORTED_VERSION)
         return 1;
     else
         return 0;
@@ -300,7 +313,9 @@ int util_runtime_is_perfworks_api(void)
 
 int util_runtime_is_events_api(void)
 {
-    if (util_dylib_cu_runtime_version() < 11000 && util_gpu_collection_kind() == GPU_COLLECTION_ALL_EVENTS)
+    enum gpu_collection_e gpus_kind = util_gpu_collection_kind();
+    if ((gpus_kind == GPU_COLLECTION_ALL_EVENTS || gpus_kind == GPU_COLLECTION_ALL_CC70)) 
+        // TODO: && util_dylib_cupti_version() <= CUPTI_EVENTS_API_MAX_SUPPORTED_VERSION)
         return 1;
     else
         return 0;

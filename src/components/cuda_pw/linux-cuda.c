@@ -133,17 +133,18 @@ static int cuda_init_private(void)
     int res = PAPI_OK;
     const char *disabled_reason;
     COMPDBG("Entering.\n");
+
+    // Initialize global_event_names array
+    res = initialize_dynamic_event_list(&global_event_names);
+    if (res != PAPI_OK) {
+        goto fn_exit;
+    }
+
     res = cupti_init(&disabled_reason);
     if (res != PAPI_OK)
     {
         sprintf(_cuda_pw_vector.cmp_info.disabled_reason, disabled_reason);
         _cuda_pw_vector.cmp_info.disabled = res;
-        goto fn_exit;
-    }
-
-    // Initialize global_event_names array
-    res = initialize_dynamic_event_list(&global_event_names);
-    if (res != PAPI_OK) {
         goto fn_exit;
     }
 

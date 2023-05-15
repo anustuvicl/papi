@@ -1,31 +1,17 @@
-/*
-    Include appropriate CUDA APIs. Set flags to check which API.
-*/
 #ifndef __CUDA_API_CONFIG_H__
 #define __CUDA_API_CONFIG_H__
 
-#   include <cuda.h>
-#   include <cupti.h>
+#include <cupti.h>
 
-#   define API_PERFWORKS 0
-#   define API_EVENTS 0
-#   define API_ERROR 1
+#define CUPTI_PROFILER_API_MIN_SUPPORTED_VERSION  (13)
+// #define CUPTI_EVENTS_API_MAX_SUPPORTED_VERSION (xx)  // TODO: Set to last version when CUPTI events API removed
 
-#   if CUPTI_API_VERSION >= 13 && CUDA_VERSION >= 11000
-#       undef API_ERROR
-#       undef API_PERFWORKS
+#if CUPTI_API_VERSION >= CUPTI_PROFILER_API_MIN_SUPPORTED_VERSION
+#   define API_PERFWORKS 1
+#endif
 
-#       define API_PERFWORKS 1
-#       define API_ERROR 0
-
-#   endif
-
-#   if CUPTI_API_VERSION < 17 && CUDA_VERSION <= 11700
-#       undef API_ERROR
-#       undef API_EVENTS
-
-#       define API_EVENTS 0  // Set this to 1 to activate Events API
-#       define API_ERROR 0
-#   endif
+// #   if CUPTI_API_VERSION <= CUPTI_EVENTS_API_MAX_SUPPORTED_VERSION
+#define API_EVENTS 1
+// #   endif
 
 #endif  // __CUDA_API_CONFIG_H__

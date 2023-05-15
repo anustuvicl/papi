@@ -16,10 +16,14 @@ int initialize_dynamic_event_list_size(event_list_t * evt_table, int size)
     evt_table->evts = (event_rec_t *) papi_calloc (evt_table->capacity, sizeof(event_rec_t));
     if (evt_table->evts == NULL) {
         ERRDBG("Error allocating memory for dynamic event table.\n");
-        return PAPI_ENOMEM;
+        goto fn_fail;
     }
-    htable_init(&(evt_table->htable));
+    if (htable_init(&(evt_table->htable)) != HTABLE_SUCCESS) {
+        goto fn_fail;
+    }
     return PAPI_OK;
+fn_fail:
+    return PAPI_ENOMEM;
 }
 
 int initialize_dynamic_event_list(event_list_t * evt_table)
@@ -102,7 +106,7 @@ int tokenize_event_name(const char * name, char * nv_name, int * gpuid)
     getdevstr += tok_len;
     *gpuid = strtol(getdevstr, &rest, 10);
     numchars = strlen(name) - strlen(getdevstr) - tok_len;
-    strncpy(nv_name, name, numchars);
+    memcpy(nv_name, name, numchars);
     nv_name[numchars] = '\0';
 
     return PAPI_OK;
