@@ -7,9 +7,9 @@
 
 int numEvents=3;
 char const *EventName[] = {
-    "cuda_pw:::smsp__warps_launched.sum:device=0",
-    "cuda_pw:::dram__bytes_write.sum:device=0",
-    "cuda_pw:::gpu__compute_memory_access_throughput_internal_activity.max.pct_of_peak_sustained_elapsed:device=0"
+    "cuda:::smsp__warps_launched.sum:device=0",
+    "cuda:::dram__bytes_write.sum:device=0",
+    "cuda:::gpu__compute_memory_access_throughput_internal_activity.max.pct_of_peak_sustained_elapsed:device=0"
 };
 
 int test_PAPI_add_named_event(int *EventSet) {
@@ -76,7 +76,7 @@ int main() {
     res = PAPI_library_init( PAPI_VER_CURRENT );
     if (res != PAPI_VER_CURRENT) test_fail(__FILE__, __LINE__, "PAPI_library_init() failed", 0);
 
-    res = PAPI_get_component_index("cuda_pw");
+    res = PAPI_get_component_index("cuda");
     if (res < 0 ) test_fail(__FILE__, __LINE__, "CUDA_PERF component not configured", 0);
 
     event_set = PAPI_NULL;

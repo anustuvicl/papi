@@ -135,9 +135,6 @@ int main( int argc, char **argv )
     const int THREAD_N = 256;
     const int ACCUM_N = BLOCK_N * THREAD_N;
 
-    CUcontext ctx[MAX_GPU_COUNT];
-    CUcontext poppedCtx;
-
     printf( "Starting simpleMultiGPU\n" );
 
 #ifdef PAPI
@@ -153,7 +150,7 @@ int main( int argc, char **argv )
         printf( "PAPI version: %d.%d.%d\n", PAPI_VERSION_MAJOR( PAPI_VERSION ), PAPI_VERSION_MINOR( PAPI_VERSION ), PAPI_VERSION_REVISION( PAPI_VERSION ) );
     }
 #endif 
-    
+
     // Report on the available CUDA devices
     int computeCapabilityMajor = 0, computeCapabilityMinor = 0;
     int runtimeVersion = 0, driverVersion = 0;
@@ -180,14 +177,6 @@ int main( int argc, char **argv )
         }
     }
 
-    // create one context per device. This can be delayed
-    // to as late as PAPI_start(), but they are needed to
-    // create streams, alloc memory, etc.
-    for (i = 0; i < GPU_N; i++) {
-        CHECK_CU_ERROR( cuCtxCreate( &(ctx[i]), 0, device[i] ), "cuCtxCreate" ); // automatically pushes the new context on the stack.
-        CHECK_CU_ERROR( cuCtxPopCurrent(&poppedCtx), "cuCtxPopCurrent" );        // ... so take it off.
-    }
-
     printf( "Generating input data...\n" );
 
     // Subdividing input data across GPUs
@@ -205,9 +194,10 @@ int main( int argc, char **argv )
         gpuBase += plan[i].dataN;
     }
 
+
     // Create streams for issuing GPU command asynchronously and allocate memory (GPU and System page-locked)
     for( i = 0; i < GPU_N; i++ ) {
-        CHECK_CU_ERROR(cuCtxPushCurrent(ctx[i]), "cuCtxPushCurrent");
+        CHECK_CUDA_ERROR( cudaSetDevice(device[i]) );
         CHECK_CUDA_ERROR( cudaStreamCreate( &plan[i].stream ) );
         CHECK_CUDA_ERROR( cudaMalloc( ( void ** ) &plan[i].d_Data, plan[i].dataN * sizeof( float ) ) );
         CHECK_CUDA_ERROR( cudaMalloc( ( void ** ) &plan[i].d_Sum, ACCUM_N * sizeof( float ) ) );
@@ -216,8 +206,8 @@ int main( int argc, char **argv )
         for( j = 0; j < plan[i].dataN; j++ ) {
             plan[i].h_Data[j] = ( float ) rand() / ( float ) RAND_MAX;
         }
-        CHECK_CU_ERROR( cuCtxPopCurrent(&poppedCtx), "cuCtxPopCurrent" );
     }
+
 
 #ifdef PAPI
     printf("Setup PAPI counters internally (PAPI)\n");
@@ -239,7 +229,7 @@ int main( int argc, char **argv )
             exit(-1);    
         }
 
-       if (strcmp("cuda_pw", aComponent->name) == 0) cid=i;                // If we found our match, record it.
+       if (strcmp("cuda", aComponent->name) == 0) cid=i;                // If we found our match, record it.
     } // end search components.
 
     if (cid < 0) {                                                      // if no PCP component found,
@@ -257,24 +247,20 @@ int main( int argc, char **argv )
     // In this example measure events from each GPU
     int numEventNames = 2;
     char const *EventNames[] = { 
-        "cuda_pw:::dram__bytes_read.sum",
-        "cuda_pw:::fe__cycles_elapsed.sum"
+        "cuda:::dram__bytes_read.sum",
+        "cuda:::fe__cycles_elapsed.sum"
     };
 
     // Add events at a GPU specific level ... eg cuda:::device:2:elapsed_cycles_sm
     // Similar to legacy CUpti API, we must change the contexts to the appropriate device to
     // add events to inform PAPI of the context that will run the kernels.
 
-    // Save current context, will restore after adding events.
-    CUcontext userContext;
-    CHECK_CU_ERROR(cuCtxGetCurrent(&userContext), "cuCtxGetCurrent");
-
     char *EventName[NUM_EVENTS];
     char tmpEventName[64];
     eventCount = 0;
     for( i = 0; i < GPU_N; i++ ) {
-        CHECK_CU_ERROR(cuCtxSetCurrent(ctx[i]), "cuCtxSetCurrent");
         for ( ee=0; ee<numEventNames; ee++ ) {
+            CHECK_CUDA_ERROR(cudaSetDevice(device[i]));
             // Create a device specific event.
             snprintf( tmpEventName, 64, "%s:device=%d", EventNames[ee], i );
             retval = PAPI_add_named_event( EventSet, tmpEventName );
@@ -289,15 +275,11 @@ int main( int argc, char **argv )
         }
     }
 
-    // Restore user context.
-
-    CHECK_CU_ERROR(cuCtxSetCurrent(userContext), "cuCtxSetCurrent");
-
     // Invoke PAPI_start().
     retval = PAPI_start( EventSet );
     if( retval != PAPI_OK )  fprintf( stderr, "PAPI_start failed, retval=%i [%s].\n", retval, PAPI_strerror(retval));
 #endif
-
+    
     // Start timing and compute on GPU(s)
     printf( "Computing with %d GPUs...\n", GPU_N );
     StartTimer();
@@ -305,7 +287,7 @@ int main( int argc, char **argv )
     // Copy data to GPU, launch the kernel and copy data back. All asynchronously
     for (i = 0; i < GPU_N; i++) {
         // Pushing a context implicitly sets the device for which it was created.
-        CHECK_CU_ERROR(cuCtxPushCurrent(ctx[i]), "cuCtxPushCurrent");
+        CHECK_CUDA_ERROR(cudaSetDevice(device[i]));
         // Copy input data from CPU
         CHECK_CUDA_ERROR( cudaMemcpyAsync( plan[i].d_Data, plan[i].h_Data, plan[i].dataN * sizeof( float ), cudaMemcpyHostToDevice, plan[i].stream ) );
         // Perform GPU computations
@@ -313,8 +295,6 @@ int main( int argc, char **argv )
         if ( cudaGetLastError() != cudaSuccess ) { printf( "reduceKernel() execution failed (GPU %d).\n", i ); exit(EXIT_FAILURE); }
         // Read back GPU results
         CHECK_CUDA_ERROR( cudaMemcpyAsync( plan[i].h_Sum_from_device, plan[i].d_Sum, ACCUM_N * sizeof( float ), cudaMemcpyDeviceToHost, plan[i].stream ) );
-        // Popping a context can change the device to match the previous context.
-        CHECK_CU_ERROR( cuCtxPopCurrent(&(ctx[i])), "cuCtxPopCurrent" );
     }
 
     // Process GPU results
@@ -322,7 +302,7 @@ int main( int argc, char **argv )
     for( i = 0; i < GPU_N; i++ ) {
         float sum;
         // Pushing a context implicitly sets the device for which it was created.
-        CHECK_CU_ERROR(cuCtxPushCurrent(ctx[i]), "cuCtxPushCurrent");
+        CHECK_CUDA_ERROR(cudaSetDevice(device[i]));
         // Wait for all operations to finish
         cudaStreamSynchronize( plan[i].stream );
         // Finalize GPU reduction for current subvector
@@ -331,8 +311,6 @@ int main( int argc, char **argv )
             sum += plan[i].h_Sum_from_device[j];
         }
         *( plan[i].h_Sum ) = ( float ) sum;
-        // Popping a context can change the device to match the previous context.
-        CHECK_CU_ERROR( cuCtxPopCurrent(&(ctx[i])), "cuCtxPopCurrent" );
     }
     double gpuTime = GetTimer();
 
@@ -340,10 +318,8 @@ int main( int argc, char **argv )
 #ifdef PAPI
     for ( i=0; i<GPU_N; i++ ) {
         // Pushing a context implicitly sets the device for which it was created.
-        CHECK_CU_ERROR(cuCtxPushCurrent(ctx[i]), "cuCtxPushCurrent");
+        CHECK_CUDA_ERROR(cudaSetDevice(device[i]));
         CHECK_CU_ERROR( cuCtxSynchronize( ), "cuCtxSynchronize" );
-        // Popping a context may change the current device to match the new current context.
-        CHECK_CU_ERROR( cuCtxPopCurrent(&(ctx[i])), "cuCtxPopCurrent" );
     }
 
     retval = PAPI_stop( EventSet, values );                                         // Stop (will read values).
@@ -394,9 +370,7 @@ int main( int argc, char **argv )
         CHECK_CUDA_ERROR( cudaFree( plan[i].d_Data ) );
         // Shut down this GPU
         CHECK_CUDA_ERROR( cudaStreamDestroy( plan[i].stream ) );
-        CHECK_CU_ERROR( cuCtxDestroy(ctx[i]), "cuCtxDestroy");
     }
 
     exit( ( diff < 1e-5 ) ? EXIT_SUCCESS : EXIT_FAILURE );
 }
-

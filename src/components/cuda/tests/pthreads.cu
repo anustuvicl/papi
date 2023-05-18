@@ -4,7 +4,6 @@
 #include <unistd.h>
 #include "gpu_work.h"
 #include <papi.h>
-#include <papi_test.h>
 
 #define PAPI_CALL(apiFuncCall)                                          \
 do {                                                                           \
@@ -36,12 +35,12 @@ do {                                                                           \
     }                                                                          \
 } while (0)
 
-#define NUM_THREADS 2
+#define NUM_THREADS 8
 // User metrics to profile
 #define NUM_METRICS 2
 const char *test_metrics[] = {
-    "cuda_pw:::smsp__warps_launched.sum",
-    "cuda_pw:::dram__bytes_write.sum",
+    "cuda:::smsp__warps_launched.sum",
+    "cuda:::dram__bytes_write.sum",
 };
 
 int numGPUs;
@@ -55,10 +54,10 @@ void * thread_gpu(void * idx)
     int tid = *((int*) idx);
     int gpuid = tid % numGPUs;
     unsigned long gettid = (unsigned long) pthread_self();
-    int retval;
+    int retval, i;
 
     int EventSet = PAPI_NULL;
-    long long values[1];
+    long long values[NUM_METRICS];
     PAPI_CALL(PAPI_create_eventset(&EventSet));
 
     DRIVER_API_CALL(cuCtxSetCurrent(cuCtx[tid]));
@@ -66,24 +65,25 @@ void * thread_gpu(void * idx)
             tid, gettid, gpuid, cuCtx[tid]);
 
     char tmpEventName[64];
-    snprintf(tmpEventName, 64, "%s:device=%d", test_metrics[tid], 0);
-    retval = PAPI_add_named_event(EventSet, tmpEventName);
-    if (retval != PAPI_OK) {
-        fprintf(stderr, "Failed to add event %s\n", tmpEventName);
+    for (i=0; i<NUM_METRICS; i++) {
+        snprintf(tmpEventName, 64, "%s:device=%d", test_metrics[i], gpuid);
+        retval = PAPI_add_named_event(EventSet, tmpEventName);
+        if (retval != PAPI_OK) {
+            fprintf(stderr, "Failed to add event %s\n", tmpEventName);
+        }
     }
 
-    retval = PAPI_start(EventSet);
-    if (retval == PAPI_ECNFLCT) {
-        test_pass(__FILE__);
-        return NULL;
-    }
-    VectorAddSubtract(5000000*(tid+1));  // gpu work
+    PAPI_CALL(PAPI_start(EventSet));
+
+    VectorAddSubtract(50000*(tid+1));  // gpu work
 
     PAPI_CALL(PAPI_stop(EventSet, values));
 
     printf("User measured values in thread id %d.\n", tid);
-    snprintf(tmpEventName, 64, "%s:device=%d", test_metrics[tid], gpuid);
-    printf("%s\t\t%lld\n", tmpEventName, values[0]);
+    for (i=0; i<NUM_METRICS; i++) {
+        snprintf(tmpEventName, 64, "%s:device=%d", test_metrics[i], gpuid);
+        printf("%s\t\t%lld\n", tmpEventName, values[i]);
+    }
     return NULL;
 }
 
@@ -107,7 +107,7 @@ int main()
     for(i = 0; i < NUM_THREADS; i++)
     {
         tid[i] = i;
-        DRIVER_API_CALL(cuCtxCreate(&(cuCtx[i]), 0, 0));
+        DRIVER_API_CALL(cuCtxCreate(&(cuCtx[i]), 0, i % numGPUs));
         DRIVER_API_CALL(cuCtxPopCurrent(&(cuCtx[i])));
 
         rc = pthread_create(&tidarr[i], NULL, thread_gpu, &(tid[i]));

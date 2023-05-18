@@ -2,7 +2,7 @@
 #include <papi.h>
 #include "gpu_work.h"
 
-#define COMP_NAME "cuda_pw"
+#define COMP_NAME "cuda"
 
 #define NUM_METRICS 1
 const char *test_metrics[] = {

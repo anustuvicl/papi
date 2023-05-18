@@ -191,8 +191,8 @@ int main(int argc, char * argv[])
 {
     // These two metrics will demonstrate whether kernels within a Range were run serially or concurrently
     vector<string> metricNames;
-    metricNames.push_back("cuda_pw:::sm__cycles_active.sum:device=");
-    metricNames.push_back("cuda_pw:::sm__cycles_elapsed.max:device=");
+    metricNames.push_back("cuda:::sm__cycles_active.sum:device=");
+    metricNames.push_back("cuda:::sm__cycles_elapsed.max:device=");
     // This metric shows that the same number of flops were executed on each run
     // Note: PAPI can't measure this with the others as it requires multiple passes to measure as three
     //       However, it can be measured as a single event.

@@ -11,13 +11,13 @@ fprintf(stderr, __VA_ARGS__); \
 #define NUM_GPUS 8
 #define NUM_EVENTS 7
 char const *EventNames[] = {
-    "cuda_pw:::dram__bytes_read.sum",
-    "cuda_pw:::fe__cycles_elapsed.sum",
-    "cuda_pw:::sm__cycles_active.sum",
-    "cuda_pw:::sm__threads_launched.sum",
-    "cuda_pw:::smsp__cycles_active.sum",
-    "cuda_pw:::smsp__inst_executed.sum",
-    "cuda_pw:::sys__cycles_elapsed.sum",
+    "cuda:::dram__bytes_read.sum",
+    "cuda:::fe__cycles_elapsed.sum",
+    "cuda:::sm__cycles_active.sum",
+    "cuda:::sm__threads_launched.sum",
+    "cuda:::smsp__cycles_active.sum",
+    "cuda:::smsp__inst_executed.sum",
+    "cuda:::sys__cycles_elapsed.sum",
 };
 
 int main()
@@ -32,8 +32,8 @@ int main()
         exit(-1);
     }
 
-    int cid = PAPI_get_component_index("cuda_pw");
-    LOG("cuda_pw component index = %d\n", cid);
+    int cid = PAPI_get_component_index("cuda");
+    LOG("cuda component index = %d\n", cid);
 
     int eventset = PAPI_NULL;
     retval = PAPI_create_eventset(&eventset);

@@ -37,45 +37,44 @@
 
 #define PAPI_CALL(apiFuncCall)                                          \
 do {                                                                           \
-    int _status = apiFuncCall;                                         \
-    if (_status != PAPI_OK) {                                              \
-        fprintf(stderr, "%s:%d: error %d: function %s failed with error %s.\n",   \
-                __FILE__, __LINE__, _status, #apiFuncCall, PAPI_strerror(_status));\
-        exit(EXIT_FAILURE);                                                    \
-    }                                                                          \
+	int _status = apiFuncCall;                                         \
+	if (_status != PAPI_OK) {                                              \
+		fprintf(stderr, "%s:%d: error %d: function %s failed with error %s.\n",   \
+				__FILE__, __LINE__, _status, #apiFuncCall, PAPI_strerror(_status));\
+		exit(EXIT_FAILURE);                                                    \
+	}                                                                          \
 } while (0)
 
 #define RUNTIME_API_CALL(apiFuncCall)                                          \
 do {                                                                           \
-    cudaError_t _status = apiFuncCall;                                         \
-    if (_status != cudaSuccess) {                                              \
-        fprintf(stderr, "%s:%d: error: function %s failed with error %s.\n",   \
-                __FILE__, __LINE__, #apiFuncCall, cudaGetErrorString(_status));\
-        exit(EXIT_FAILURE);                                                    \
-    }                                                                          \
+	cudaError_t _status = apiFuncCall;                                         \
+	if (_status != cudaSuccess) {                                              \
+		fprintf(stderr, "%s:%d: error: function %s failed with error %s.\n",   \
+				__FILE__, __LINE__, #apiFuncCall, cudaGetErrorString(_status));\
+		exit(EXIT_FAILURE);                                                    \
+	}                                                                          \
 } while (0)
 
 #define DRIVER_API_CALL(apiFuncCall)                                           \
 do {                                                                           \
-    CUresult _status = apiFuncCall;                                            \
-    if (_status != CUDA_SUCCESS) {                                             \
-        fprintf(stderr, "%s:%d: error: function %s failed with error %d.\n",   \
-                __FILE__, __LINE__, #apiFuncCall, _status);                    \
-        exit(EXIT_FAILURE);                                                    \
-    }                                                                          \
+	CUresult _status = apiFuncCall;                                            \
+	if (_status != CUDA_SUCCESS) {                                             \
+		fprintf(stderr, "%s:%d: error: function %s failed with error %d.\n",   \
+				__FILE__, __LINE__, #apiFuncCall, _status);                    \
+		exit(EXIT_FAILURE);                                                    \
+	}                                                                          \
 } while (0)
 
 #define NUM_THREADS 8
 // User metrics to profile
 #define NUM_METRICS 2
 const char *event_names[] = {
-    "cuda_pw:::smsp__warps_launched.sum",
-    "cuda_pw:::dram__bytes_write.sum",  //.pct_of_peak_burst_frame",
+	"cuda:::smsp__warps_launched.sum",
+	"cuda:::dram__bytes_write.sum",  //.pct_of_peak_burst_frame",
 };
 
 int main(int argc, char *argv[]) {
     int num_gpus = 0, i;
-    CUcontext ctx_arr[NUM_THREADS];
 
     printf("%s Starting...\n\n", argv[0]);
 
@@ -96,16 +95,14 @@ int main(int argc, char *argv[]) {
         cudaDeviceProp dprop;
         RUNTIME_API_CALL(cudaGetDeviceProperties(&dprop, i));
         printf("   %d: %s\n", i, dprop.name);
-    }
-    // Create a gpu context for every thread
-    for (i=0; i < NUM_THREADS; i++) {
-        DRIVER_API_CALL(cuCtxCreate(&(ctx_arr[i]), 0, i % num_gpus));  // "% num_gpus" allows more CPU threads than GPU devices
-        DRIVER_API_CALL(cuCtxPopCurrent(&(ctx_arr[i])));
+
+        RUNTIME_API_CALL(cudaSetDevice(i));
+        RUNTIME_API_CALL(cudaFree(NULL));
     }
 
     printf("---------------------------\n");
     int retval = PAPI_library_init( PAPI_VER_CURRENT );
-    if ( retval != PAPI_VER_CURRENT ) {
+    if( retval != PAPI_VER_CURRENT ) {
         fprintf( stderr, "Please recompile this test program. Installed PAPI has been updated.\n" );
         exit(-1);
     }
@@ -124,8 +121,8 @@ int main(int argc, char *argv[]) {
         unsigned int num_cpu_threads = omp_get_num_threads();
         int gpu_id = cpu_thread_id % num_gpus;
 
-        DRIVER_API_CALL(cuCtxPushCurrent(ctx_arr[cpu_thread_id]));
-        printf("CPU thread %d (of %d) uses CUDA device %d with context %p @ eventset %d\n", cpu_thread_id, num_cpu_threads, gpu_id, ctx_arr[cpu_thread_id], EventSet);
+        RUNTIME_API_CALL(cudaSetDevice(gpu_id));
+        printf("CPU thread %d (of %d) uses CUDA device %d @ eventset %d\n", cpu_thread_id, num_cpu_threads, gpu_id, EventSet);
         char tmpEventName[64];
         for (j=0; j<NUM_METRICS; j++) {
             snprintf(tmpEventName, 64, "%s:device=%d", event_names[j], gpu_id);
@@ -145,13 +142,9 @@ int main(int argc, char *argv[]) {
             snprintf(tmpEventName, 64, "%s:device=%d", event_names[j], gpu_id);
             printf("%s\t\t%lld\n", tmpEventName, values[j]);
         }
-        DRIVER_API_CALL(cuCtxPopCurrent(&(ctx_arr[gpu_id])));
     }  // omp parallel region end
 
     printf("---------------------------\n");
-    for (i=0; i < NUM_THREADS; i++) {
-        DRIVER_API_CALL(cuCtxDestroy(ctx_arr[i]));
-    }
 
     if (cudaSuccess != cudaGetLastError())
         printf("%s\n", cudaGetErrorString(cudaGetLastError()));
