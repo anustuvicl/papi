@@ -1,11 +1,9 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include "papi_memory.h"
 
-#include "common.h"
+#include "lcuda_common.h"
+#include "lcuda_htable.h"
 #include "debug_comp.h"
-#include "htable.h"
 
 #define ADDED_EVENTS_INITIAL_CAPACITY 64
 

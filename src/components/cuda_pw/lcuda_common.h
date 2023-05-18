@@ -1,9 +1,5 @@
-/*
-  This file contains data structures visible to linux-cuda.c and cupti_profiler.h
-*/
-
-#ifndef __COMMON_H__
-#define __COMMON_H__
+#ifndef __LCUDA_COMMON_H__
+#define __LCUDA_COMMON_H__
 
 #include <papi.h>
 
@@ -43,4 +39,4 @@ int devmask_release(event_list_t *evt_table);
 #define MAX_FILES 100
 int search_files_in_path(const char* file_name, const char* search_path, char** file_paths);
 
-#endif  // __COMMON_H__
+#endif  // __LCUDA_COMMON_H__

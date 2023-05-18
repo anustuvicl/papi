@@ -12,17 +12,50 @@
 #include <nvperf_cuda_host.h>
 #include <nvperf_target.h>
 
-#include "cuda_utils.h"
+#include "lcuda_utils.h"
 #include "cupti_profiler.h"
 #include "debug_comp.h"
 
+typedef struct byte_array_s         byte_array_t;
+typedef struct cuptip_gpu_control_s cuptip_gpu_control_t;
+typedef struct cuptip_control_s     cuptip_control_t;
+typedef struct list_metrics_s       list_metrics_t;
+typedef struct NVPA_MetricsContext  NVPA_MetricsContext;
+enum running_e           {False, True};
+enum collection_method_e {SpotValue, RunningMin, RunningMax, RunningSum};
+
+static void *dl_nvpw;
+static int num_gpus;
+static list_metrics_t *avail_events;
+
 static int load_cupti_perf_sym(void);
+static int unload_cupti_perf_sym(void);
 static int load_nvpw_sym(void);
+static int unload_nvpw_sym(void);
 static int initialize_cupti_profiler_api(void);
+static int deinitialize_cupti_profiler_api(void);
 static int initialize_perfworks_api(void);
 static int get_chip_name(int dev_num, char* chipName);
-
-static int num_gpus;
+static int add_events_per_gpu(event_list_t *event_names, int event_count, int *evt_ids, cuptip_control_t *state);
+static int retrieve_metric_details(NVPA_MetricsContext *pMetricsContext, const char *nv_name,
+                                   char *description, int *numDep, NVPA_RawMetricRequest **pRMR);
+static int get_event_names_rmr(NVPA_MetricsContext* pMetricsContext, cuptip_gpu_control_t *ctl);
+static int check_num_passes(struct NVPA_RawMetricsConfig *pRawMetricsConfig, int rmr_count,
+                            NVPA_RawMetricRequest *rmr, int *num_pass);
+static int control_state_validate(cuptip_control_t *state);
+static int get_counter_availability(cuptip_gpu_control_t *ctl);
+static int metric_get_config_image(const char *chipName, cuptip_gpu_control_t *ctl);
+static int metric_get_counter_data_prefix_image(const char* chipName, cuptip_gpu_control_t *ctl);
+static int create_counter_data_image(cuptip_gpu_control_t *ctl);
+static int reset_cupti_prof_config_images(cuptip_gpu_control_t *ctl);
+static int begin_profiling(cuptip_gpu_control_t *ctl);
+static int end_profiling(cuptip_gpu_control_t *ctl);
+static int eval_metric_values_per_gpu(NVPA_MetricsContext* pMetricsContext, cuptip_gpu_control_t *ctl);
+static int get_metric_values(cuptip_control_t *state);
+static int find_same_chipname(int gpu_id);
+static int init_all_metrics(void);
+static void free_all_enumerated_metrics(void);
+static enum collection_method_e get_event_collection_method(const char *evt_name);
 
 NVPA_Status ( *NVPW_GetSupportedChipNamesPtr ) (NVPW_GetSupportedChipNames_Params* params);
 NVPA_Status ( *NVPW_CUDA_MetricsContext_CreatePtr ) (NVPW_CUDA_MetricsContext_Create_Params* params);
@@ -88,8 +121,6 @@ CUptiResult ( *cuptiFinalizePtr ) (void);
             handleerror;  \
         }  \
     } while (0);
-
-static void *dl_nvpw;
 
 static int load_cupti_perf_sym(void)
 {
@@ -278,6 +309,7 @@ static int deinitialize_cupti_profiler_api(void)
     else
         return PAPI_ESYS;
 }
+
 static int initialize_perfworks_api(void)
 {
     COMPDBG("Entering.\n");
@@ -304,12 +336,12 @@ static int get_chip_name(int dev_num, char* chipName)
     return PAPI_OK;
 }
 
-typedef struct byte_array_s {
-    uint8_t *data;
+struct byte_array_s {
     int size;
-} byte_array_t;
+    uint8_t *data;
+};
 
-struct cupti_gpu_control_s {
+struct cuptip_gpu_control_s {
     int gpu_id;
     event_list_t event_names;
     int rmr_count;
@@ -321,15 +353,13 @@ struct cupti_gpu_control_s {
     byte_array_t counterAvailabilityImage;
 };
 
-enum running_e {False, True};
-
-struct cupti_profiler_control_s {
-    struct cupti_gpu_control_s *ctl;
+struct cuptip_control_s {
+    cuptip_gpu_control_t *ctl;
     int read_count;
     enum running_e running;
 };
 
-static int add_events_per_gpu(struct event_name_list_s * event_names, int event_count, int *evt_ids, struct cupti_profiler_control_s *state)
+static int add_events_per_gpu(event_list_t *event_names, int event_count, int *evt_ids, cuptip_control_t *state)
 {
     COMPDBG("Entering.\n");
     int i, gpu_id, res = PAPI_OK;
@@ -357,7 +387,7 @@ fn_exit:
     return res;
 }
 
-static int retrieve_metric_details(struct NVPA_MetricsContext *pMetricsContext, const char *nv_name,
+static int retrieve_metric_details(NVPA_MetricsContext *pMetricsContext, const char *nv_name,
                                    char *description, int *numDep, NVPA_RawMetricRequest **pRMR)
 {
     COMPDBG("Entering.\n");
@@ -410,7 +440,7 @@ static int retrieve_metric_details(struct NVPA_MetricsContext *pMetricsContext, 
     return PAPI_OK;
 }
 
-static int get_event_names_rmr(struct NVPA_MetricsContext* pMetricsContext, struct cupti_gpu_control_s *ctl)
+static int get_event_names_rmr(NVPA_MetricsContext* pMetricsContext, cuptip_gpu_control_t *ctl)
 {
     COMPDBG("Entering.\n");
     int res = PAPI_OK;
@@ -454,7 +484,7 @@ fn_exit:
     return res;
 }
 
-static int check_num_passes(struct NVPA_RawMetricsConfig* pRawMetricsConfig, int rmr_count, NVPA_RawMetricRequest *rmr, int *num_pass)
+static int check_num_passes(struct NVPA_RawMetricsConfig *pRawMetricsConfig, int rmr_count, NVPA_RawMetricRequest *rmr, int *num_pass)
 {
     COMPDBG("Entering.\n");
     NVPW_RawMetricsConfig_BeginPassGroup_Params beginPassGroupParams = {
@@ -502,7 +532,7 @@ static int check_num_passes(struct NVPA_RawMetricsConfig* pRawMetricsConfig, int
     return PAPI_OK;
 }
 
-static int control_state_validate(struct cupti_profiler_control_s *state)
+static int control_state_validate(cuptip_control_t *state)
 {
     COMPDBG("Entering.\n");
     int gpu_id, res = PAPI_OK, passes;
@@ -566,7 +596,7 @@ fn_exit:
     return res;
 }
 
-static int get_counter_availability(struct cupti_gpu_control_s *ctl)
+static int get_counter_availability(cuptip_gpu_control_t *ctl)
 {
     int res;
     // Get size of counterAvailabilityImage - in first pass, GetCounterAvailability return size needed for data
@@ -596,7 +626,7 @@ static int get_counter_availability(struct cupti_gpu_control_s *ctl)
 }
 
 // Adapted from `metric.cpp` -------------------------
-static int metric_get_config_image(const char *chipName, struct cupti_gpu_control_s *ctl)
+static int metric_get_config_image(const char *chipName, cuptip_gpu_control_t *ctl)
 {
     COMPDBG("Entering.\n");
     // LOGDBG("RMRcount = %d, metric = %s\n", ctl->rmr_count, ctl->rmr[0].pMetricName);
@@ -680,7 +710,7 @@ static int metric_get_config_image(const char *chipName, struct cupti_gpu_contro
     return PAPI_OK;
 }
 
-static int metric_get_counter_data_prefix_image(const char* chipName, struct cupti_gpu_control_s *ctl)
+static int metric_get_counter_data_prefix_image(const char* chipName, cuptip_gpu_control_t *ctl)
 {
     COMPDBG("Entering.\n");
     NVPW_CounterDataBuilder_Create_Params counterDataBuilderCreateParams = {
@@ -730,7 +760,7 @@ static int metric_get_counter_data_prefix_image(const char* chipName, struct cup
 }
 
 // Adapted from 11.2/cupti-samples/userrange_profiling/simplecuda.cu:CreateCounterDataImage
-static int create_counter_data_image(struct cupti_gpu_control_s *ctl)
+static int create_counter_data_image(cuptip_gpu_control_t *ctl)
 {
     COMPDBG("Entering.\n");
     CUpti_Profiler_CounterDataImageOptions counterDataImageOptions = {
@@ -797,7 +827,7 @@ static int create_counter_data_image(struct cupti_gpu_control_s *ctl)
     return PAPI_OK;
 }
 
-static int reset_cupti_prof_config_images(struct cupti_gpu_control_s *ctl)
+static int reset_cupti_prof_config_images(cuptip_gpu_control_t *ctl)
 {
     COMPDBG("Entering.\n");
     papi_free(ctl->counterDataImagePrefix.data);
@@ -808,7 +838,7 @@ static int reset_cupti_prof_config_images(struct cupti_gpu_control_s *ctl)
     return PAPI_OK;
 }
 
-static int begin_profiling(struct cupti_gpu_control_s *ctl)
+static int begin_profiling(cuptip_gpu_control_t *ctl)
 {
     COMPDBG("Entering.\n");
     byte_array_t *configImage = &(ctl->configImage);
@@ -872,7 +902,7 @@ static int begin_profiling(struct cupti_gpu_control_s *ctl)
     return PAPI_OK;
 }
 
-static int end_profiling(struct cupti_gpu_control_s *ctl)
+static int end_profiling(cuptip_gpu_control_t *ctl)
 {
 
     COMPDBG("EndProfiling. dev = %d\n", ctl->gpu_id);
@@ -924,7 +954,7 @@ static int end_profiling(struct cupti_gpu_control_s *ctl)
 }
 
 // Adapted from Eval.cpp
-static int eval_metric_values_per_gpu(struct NVPA_MetricsContext* pMetricsContext, struct cupti_gpu_control_s *ctl)
+static int eval_metric_values_per_gpu(NVPA_MetricsContext* pMetricsContext, cuptip_gpu_control_t *ctl)
 {
     COMPDBG("eval_metric_values. dev = %d\n", ctl->gpu_id);
     if (!ctl->counterDataImage.size) {
@@ -982,12 +1012,12 @@ fn_exit:
     return res;
 }
 
-static int get_metric_values(struct cupti_profiler_control_s *state)
+static int get_metric_values(cuptip_control_t *state)
 {
     COMPDBG("Entering.\n");
     int gpu_id, res = PAPI_OK, i;
     char chip_name[32];
-    struct cupti_gpu_control_s *ctl;
+    cuptip_gpu_control_t *ctl;
     for (gpu_id=0; gpu_id<num_gpus; gpu_id++) {
         ctl = &(state->ctl[gpu_id]);
         if (ctl->event_names.count == 0)
@@ -1029,14 +1059,12 @@ fn_exit:
 }
 
 // List metrics API
-typedef struct list_metrics_s {
+struct list_metrics_s {
     char chip_name[32];
     NVPW_CUDA_MetricsContext_Create_Params metricsContextCreateParams;
     int num_metrics;
     event_list_t *nv_metrics;
-} list_metrics_t;
-
-static list_metrics_t *avail_events;
+};
 
 static int find_same_chipname(int gpu_id)
 {
@@ -1049,7 +1077,7 @@ static int find_same_chipname(int gpu_id)
     return -1;  // indicates not found
 }
 
-static int init_all_metrics()
+static int init_all_metrics(void)
 {
     int gpu_id, res;
     avail_events = (list_metrics_t *) papi_calloc(num_gpus, sizeof(list_metrics_t));
@@ -1063,7 +1091,7 @@ static int init_all_metrics()
     return PAPI_OK;
 }
 
-int cupti_profiler_enumerate_all_metric_names(event_list_t *all_evt_names)
+int cuptip_enumerate_all_metric_names(event_list_t *all_evt_names)
 {
     int gpu_id, i, found, listsubmetrics=1, res;
     if (avail_events[0].nv_metrics != NULL)  // Already eumerated for 1st device? Then exit...
@@ -1147,7 +1175,7 @@ fn_exit:
     return PAPI_OK;
 }
 
-int cupti_profiler_get_event_description(const char *evt_name, char *description)
+int cuptip_get_event_description(const char *evt_name, char *description)
 {
     int res, numdep, gpu_id, passes;
     char nv_name[PAPI_MAX_STR_LEN];
@@ -1225,7 +1253,7 @@ static void free_all_enumerated_metrics(void)
 }
 
 // CUPTI Profiler component API functions
-int cupti_profiler_init(const char ** pdisabled_reason)
+int cuptip_init(const char **pdisabled_reason)
 {
     COMPDBG("Entering.\n");
     int retval = PAPI_OK;
@@ -1236,16 +1264,12 @@ int cupti_profiler_init(const char ** pdisabled_reason)
         *pdisabled_reason = "Unable to load CUDA library functions.";
         goto fn_fail;
     }
-    retval = get_device_count();
-    if (retval <= 0) {
+    num_gpus = get_device_count();
+    if (num_gpus <= 0) {
         *pdisabled_reason = "No GPUs found on system.";
         goto fn_fail;
     }
-    num_gpus = retval;
-    if (util_gpu_collection_kind() == GPU_COLLECTION_MIXED) {
-        *pdisabled_reason = "Mixed compute capability not supported.";
-        goto fn_fail;
-    }
+
     retval = initialize_cupti_profiler_api();
     retval += initialize_perfworks_api();
     if (retval != PAPI_OK) {
@@ -1265,17 +1289,17 @@ fn_fail:
     return PAPI_ECMP;
 }
 
-int cupti_profiler_control_create(struct event_name_list_s * all_event_names, int event_count, int *evt_ids, void ** pctl, void **pcu_ctx)
+int cuptip_control_create(event_list_t *all_event_names, int event_count, int *evt_ids, void **pctl, void **pcu_ctx)
 {
     COMPDBG("Entering.\n");
     int res = PAPI_OK, gpu_id;
     // Allocate profiler control state
-    struct cupti_profiler_control_s * state = (struct cupti_profiler_control_s *) papi_calloc (1, sizeof(struct cupti_profiler_control_s));
+    cuptip_control_t *state = (cuptip_control_t *) papi_calloc (1, sizeof(cuptip_control_t));
     if (state == NULL) {
         return PAPI_ENOMEM;
     }
     // Allocate array of profiler states for each gpu
-    state->ctl = (struct cupti_gpu_control_s *) papi_calloc(num_gpus, sizeof(struct cupti_gpu_control_s));
+    state->ctl = (cuptip_gpu_control_t *) papi_calloc(num_gpus, sizeof(cuptip_gpu_control_t));
     if (state->ctl == NULL) {
         return PAPI_ENOMEM;
     }
@@ -1321,10 +1345,10 @@ fn_exit:
     return res;
 }
 
-int cupti_profiler_control_destroy(void **pctl)
+int cuptip_control_destroy(void **pctl)
 {
     COMPDBG("Entering.\n");
-    struct cupti_profiler_control_s * state = (struct cupti_profiler_control_s *) (*pctl);
+    cuptip_control_t *state = (cuptip_control_t *) (*pctl);
     int i, j;
     for (i=0; i<num_gpus; i++) {
         reset_cupti_prof_config_images(&(state->ctl[i]));
@@ -1340,11 +1364,11 @@ int cupti_profiler_control_destroy(void **pctl)
     return PAPI_OK;
 }
 
-int cupti_profiler_start(void **pctl, void **pcu_ctx)
+int cuptip_start(void **pctl, void **pcu_ctx)
 {
     COMPDBG("Entering.\n");
-    struct cupti_profiler_control_s * state = (struct cupti_profiler_control_s *) (*pctl);
-    struct cupti_gpu_control_s *ctl;
+    cuptip_control_t *state = (cuptip_control_t *) (*pctl);
+    cuptip_gpu_control_t *ctl;
     CUcontext * cu_ctx = (CUcontext *) (*pcu_ctx);
     CUcontext userCtx;
     CUDA_CALL(cuCtxGetCurrentPtr(&userCtx), return PAPI_ENOSUPP);
@@ -1400,11 +1424,11 @@ fn_fail:
     return PAPI_ECMP;
 }
 
-int cupti_profiler_stop(void **pctl, void **pcu_ctx)
+int cuptip_stop(void **pctl, void **pcu_ctx)
 {
     COMPDBG("Entering.\n");
-    struct cupti_profiler_control_s * state = (struct cupti_profiler_control_s *) (*pctl);
-    struct cupti_gpu_control_s *ctl;
+    cuptip_control_t *state = (cuptip_control_t *) (*pctl);
+    cuptip_gpu_control_t *ctl;
     CUcontext * cu_ctx = (CUcontext *) (*pcu_ctx);
     CUcontext userCtx;
     CUDA_CALL(cuCtxGetCurrentPtr(&userCtx), return PAPI_ENOSUPP);
@@ -1440,9 +1464,7 @@ fn_fail:
     return PAPI_ECMP;
 }
 
-enum {SpotValue, RunningMin, RunningMax, RunningSum};
-
-static int get_event_collection_method(const char * evt_name)
+static enum collection_method_e get_event_collection_method(const char *evt_name)
 {
     if (strstr(evt_name, ".sum") != NULL)
         return RunningSum;
@@ -1454,12 +1476,12 @@ static int get_event_collection_method(const char * evt_name)
         return SpotValue;
 }
 
-int cupti_profiler_control_read(void **pctl, long long *values)
+int cuptip_control_read(void **pctl, long long *values)
 {
     COMPDBG("Entering.\n");
     int res, gpu_id, i;
-    struct cupti_profiler_control_s * state = (struct cupti_profiler_control_s *) (*pctl);
-    struct cupti_gpu_control_s *ctl;
+    cuptip_control_t *state = (cuptip_control_t *) (*pctl);
+    cuptip_gpu_control_t *ctl;
     unsigned int evt_pos;
     long long val;
     res = get_metric_values(state);
@@ -1497,15 +1519,15 @@ int cupti_profiler_control_read(void **pctl, long long *values)
     return res;
 }
 
-int cupti_profiler_control_reset(void **pctl)
+int cuptip_control_reset(void **pctl)
 {
     COMPDBG("Entering.\n");
-    struct cupti_profiler_control_s * state = (struct cupti_profiler_control_s *) (*pctl);
+    cuptip_control_t *state = (cuptip_control_t *) (*pctl);
     state->read_count = 0;
     return PAPI_OK;
 }
 
-void cupti_profiler_shutdown(void)
+void cuptip_shutdown(void)
 {
     COMPDBG("Entering.\n");
     free_all_enumerated_metrics();

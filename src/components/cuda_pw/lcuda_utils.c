@@ -1,11 +1,10 @@
-#include <stdio.h>
 #include <dlfcn.h>
 #include <papi.h>
 #include "papi_memory.h"
 
-#include "cuda_api_config.h"
-#include "cuda_utils.h"
-#include "common.h"
+#include "lcuda_config.h"
+#include "lcuda_utils.h"
+#include "lcuda_common.h"
 
 static void *dl_drv, *dl_rt;
 

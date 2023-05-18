@@ -1,5 +1,5 @@
-#ifndef __CUDA_API_CONFIG_H__
-#define __CUDA_API_CONFIG_H__
+#ifndef __LCUDA_CONFIG_H__
+#define __LCUDA_CONFIG_H__
 
 #include <cupti.h>
 
@@ -14,4 +14,4 @@
 #define API_EVENTS 1
 // #   endif
 
-#endif  // __CUDA_API_CONFIG_H__
+#endif  // __LCUDA_CONFIG_H__

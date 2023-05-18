@@ -5,11 +5,14 @@
 #include <string.h>
 
 #include "debug_comp.h"
-#include "common.h"
-
-#include "cupti_component.h"
+#include "lcuda_common.h"
+#include "lcuda_dispatch.h"
 
 papi_vector_t _cuda_pw_vector;
+
+unsigned _cuda_pw_lock;
+
+event_list_t global_event_names;  // List of event names added by user
 
 static int cuda_init_component(int cidx);
 static int cuda_shutdown_component(void);
@@ -36,15 +39,13 @@ static int cuda_init_private(void);
 
 #define PAPI_CUDA_MAX_COUNTERS 512
 
-struct cuda_ctl {
+typedef struct cuda_ctl {
     int events_count;
     int events_id[PAPI_CUDA_MAX_COUNTERS];
-    void * thread_info;  // thread specific info: all gpu user CUcontexts
-    void * cupti_ctl;  // pointer to all gpu cuda profiler state
     long long values[PAPI_CUDA_MAX_COUNTERS];
-};
-
-event_list_t global_event_names;  // List of event names added by user
+    void *thread_info;  // thread specific info: all gpu user CUcontexts
+    void *cupti_ctl;  // pointer to all gpu cuda profiler state
+} cuda_ctl_t;
 
 papi_vector_t _cuda_pw_vector = {
     .cmp_info = {
@@ -69,7 +70,7 @@ papi_vector_t _cuda_pw_vector = {
     },
     .size = {
         .context = 0,
-        .control_state = sizeof(struct cuda_ctl),
+        .control_state = sizeof(cuda_ctl_t),
     },
     .init_component = cuda_init_component,
     .shutdown_component = cuda_shutdown_component,
@@ -93,8 +94,6 @@ papi_vector_t _cuda_pw_vector = {
     .reset = cuda_reset,
 };
 
-unsigned _cuda_pw_lock;
-
 static int cuda_init_component(int cidx)
 {
     COMPDBG("Entering with component idx: %d\n", cidx);
@@ -114,7 +113,6 @@ static int cuda_init_component(int cidx)
 static int cuda_shutdown_component(void)
 {
     COMPDBG("Entering.\n");
-    int res = PAPI_OK;
     free_event_name_list(&global_event_names);  // Free the global event names added dynamically
 
     if (!_cuda_pw_vector.cmp_info.initialized ||
@@ -123,9 +121,8 @@ static int cuda_shutdown_component(void)
 
     _cuda_pw_vector.cmp_info.initialized = 0;
 
-    cupti_shutdown();
-    // todo: Reverse of private init.
-    return res;
+    cuptid_shutdown();
+    return PAPI_OK;
 }
 
 static int cuda_init_private(void)
@@ -140,7 +137,7 @@ static int cuda_init_private(void)
         goto fn_exit;
     }
 
-    res = cupti_init(&disabled_reason);
+    res = cuptid_init(&disabled_reason);
     if (res != PAPI_OK)
     {
         sprintf(_cuda_pw_vector.cmp_info.disabled_reason, disabled_reason);
@@ -175,7 +172,7 @@ static int cuda_ntv_enum_events(unsigned int *event_code, int modifier)
     if (res != PAPI_OK)
         goto fn_exit;
 
-    res = cupti_enumerate_all_events(&global_event_names);
+    res = cuptid_enumerate_all_events(&global_event_names);
     if (res != PAPI_OK)
         goto fn_exit;
 
@@ -244,13 +241,13 @@ static int cuda_ntv_code_to_descr(unsigned int event_code, char *descr, int __at
     res = check_n_initialize();
     if (res != PAPI_OK)
         goto fn_exit;
-    res = cupti_enumerate_all_events(&global_event_names);
+    res = cuptid_enumerate_all_events(&global_event_names);
     if (res != PAPI_OK)
         goto fn_exit;
     res = cuda_ntv_code_to_name(event_code, evt_name, PAPI_2MAX_STR_LEN);
     if (res != PAPI_OK)
         goto fn_exit;
-    res = cupti_get_event_description(evt_name, descr);
+    res = cuptid_get_event_description(evt_name, descr);
 fn_exit:
     return res;
 }
@@ -292,12 +289,12 @@ static int cuda_update_control_state(hwd_control_state_t *ctl,
         return res;
     if (ntv_count == 0)
         goto fn_exit;
-    struct cuda_ctl *control = (struct cuda_ctl *) ctl;
+    cuda_ctl_t *control = (cuda_ctl_t *) ctl;
     LOCKDBG("Locking.\n");
     _papi_hwi_lock(_cuda_pw_lock);
     LOCKDBG("Locked.\n");
     if (control->thread_info == NULL) {
-        res = cupti_thread_info_init(&(control->thread_info));
+        res = cuptid_thread_info_init(&(control->thread_info));
     }
     control->events_count = ntv_count;
 
@@ -313,12 +310,12 @@ static int cuda_update_control_state(hwd_control_state_t *ctl,
 
     // Validate the added names so far in a temporary context
     void *tmp_context;
-    res = cupti_control_create(&global_event_names, control->events_count, control->events_id, &tmp_context, &(control->thread_info));
+    res = cuptid_control_create(&global_event_names, control->events_count, control->events_id, &tmp_context, &(control->thread_info));
     if (res != PAPI_OK) {
-        cupti_control_destroy(&tmp_context);
+        cuptid_control_destroy(&tmp_context);
         goto fn_exit;
     }
-    res = cupti_control_destroy(&tmp_context);
+    res = cuptid_control_destroy(&tmp_context);
 
 fn_exit:
     LOCKDBG("Unlocking.\n");
@@ -333,12 +330,12 @@ fn_fail:
 static int cuda_cleanup_eventset(hwd_control_state_t *ctl)
 {
     COMPDBG("Entering.\n");
-    struct cuda_ctl *control = (struct cuda_ctl *) ctl;
+    cuda_ctl_t *control = (cuda_ctl_t *) ctl;
     int res = PAPI_OK;
     if (control->cupti_ctl)
-        res += cupti_control_destroy(&(control->cupti_ctl));
+        res += cuptid_control_destroy(&(control->cupti_ctl));
     if (control->thread_info)
-        res += cupti_thread_info_free(&(control->thread_info));
+        res += cuptid_thread_info_free(&(control->thread_info));
     if (res != PAPI_OK)
         return PAPI_ECMP;
     return PAPI_OK;
@@ -352,17 +349,17 @@ static int cuda_start(hwd_context_t __attribute__((unused)) *ctx, hwd_control_st
     _papi_hwi_lock(_cuda_pw_lock);
     LOCKDBG("Locked.\n");
 
-    struct cuda_ctl *control = (struct cuda_ctl *) ctl;
+    cuda_ctl_t *control = (cuda_ctl_t *) ctl;
     // Set initial counters to zero
     for (i=0; i<control->events_count; i++) {
         control->values[i] = 0;
     }
-    res = cupti_control_create(&global_event_names,
+    res = cuptid_control_create(&global_event_names,
                              control->events_count,
                              control->events_id,
                              &(control->cupti_ctl),
                              &(control->thread_info));
-    res = cupti_start( &(control->cupti_ctl), &(control->thread_info) );
+    res = cuptid_start( &(control->cupti_ctl), &(control->thread_info) );
     LOCKDBG("Unlocking.\n");
     _papi_hwi_unlock(_cuda_pw_lock);
     return res;
@@ -374,12 +371,12 @@ int cuda_stop(hwd_context_t __attribute__((unused)) *ctx, hwd_control_state_t *c
     LOCKDBG("Locking.\n");
     _papi_hwi_lock(_cuda_pw_lock);
     LOCKDBG("Locked.\n");
-    struct cuda_ctl *control = (struct cuda_ctl *) ctl;
+    cuda_ctl_t *control = (cuda_ctl_t *) ctl;
     int res;
-    res = cupti_stop( &(control->cupti_ctl), &(control->thread_info) );
+    res = cuptid_stop( &(control->cupti_ctl), &(control->thread_info) );
     if (res != PAPI_OK)
         goto fn_exit;
-    res = cupti_control_destroy( &(control->cupti_ctl) );
+    res = cuptid_control_destroy( &(control->cupti_ctl) );
 fn_exit:
     LOCKDBG("Unlocking.\n");
     _papi_hwi_unlock(_cuda_pw_lock);
@@ -389,22 +386,22 @@ fn_exit:
 static int cuda_read(hwd_context_t __attribute__((unused)) *ctx, hwd_control_state_t *ctl, long long **val, int __attribute__((unused)) flags)
 {
     COMPDBG("Entering.\n");
-    struct cuda_ctl * control = (struct cuda_ctl *) ctl;
+    cuda_ctl_t *control = (cuda_ctl_t *) ctl;
     int res;
     LOCKDBG("Locking.\n");
     _papi_hwi_lock(_cuda_pw_lock);
     LOCKDBG("Locked.\n");
-    res = cupti_stop( &(control->cupti_ctl), &(control->thread_info) );
+    res = cuptid_stop( &(control->cupti_ctl), &(control->thread_info) );
     if (res != PAPI_OK)
         goto fn_exit;
     // First collect the values from the lower layer for last session
-    res = cupti_control_read( &(control->cupti_ctl), (long long *) &(control->values) );
+    res = cuptid_control_read( &(control->cupti_ctl), (long long *) &(control->values) );
     if (res != PAPI_OK)
         goto fn_exit;
     // Then copy the values to the user array `val`
     *val = control->values;
 
-    res = cupti_start( &(control->cupti_ctl), &(control->thread_info) );
+    res = cuptid_start( &(control->cupti_ctl), &(control->thread_info) );
 
 fn_exit:
     LOCKDBG("Unlocking.\n");
@@ -414,10 +411,10 @@ fn_exit:
 
 static int cuda_reset(hwd_context_t __attribute__((unused)) *ctx, hwd_control_state_t *ctl)
 {
-    struct cuda_ctl * control = (struct cuda_ctl *) ctl;
+    cuda_ctl_t *control = (cuda_ctl_t *) ctl;
     int i;
     for (i = 0; i < control->events_count; i++) {
         control->values[i] = 0;
     }
-    return cupti_control_reset( &(control->cupti_ctl) );
+    return cuptid_control_reset( &(control->cupti_ctl) );
 }
