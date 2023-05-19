@@ -8,7 +8,7 @@
 #include <cuda.h>
 #include <cupti.h>
 
-#include "debug_comp.h"
+#include "lcuda_debug.h"
 
 extern void *dl_cupti;
 
@@ -53,7 +53,7 @@ extern CUptiResult ( *cuptiGetVersionPtr ) (uint32_t* );
         CUresult _status = (call);  \
         LOGCUDACALL("\t" #call "\n");  \
         if (_status != CUDA_SUCCESS) {  \
-            fprintf(stderr, "\033[31;1mCUDA Error %d: %s: %d: Error in call to " #call "\033[0m\n", _status, __FILE__, __LINE__);  \
+            ERRDBG("CUDA Error %d: Error in call to " #call "\n", _status);  \
             EXIT_OR_NOT; \
             handleerror;  \
         }  \
@@ -63,7 +63,7 @@ extern CUptiResult ( *cuptiGetVersionPtr ) (uint32_t* );
         cudaError_t _status = (call);  \
         LOGCUDACALL("\t" #call "\n");  \
         if (_status != cudaSuccess) {  \
-            fprintf(stderr, "\033[31;1mCUDART Error %d: %s: %d: Error in call to " #call "\033[0m\n", _status, __FILE__, __LINE__);  \
+            ERRDBG("CUDART Error %d: Error in call to " #call "\n", _status);  \
             EXIT_OR_NOT; \
             handleerror;  \
         }  \
@@ -71,9 +71,9 @@ extern CUptiResult ( *cuptiGetVersionPtr ) (uint32_t* );
 #define CUPTI_CALL( call, handleerror ) \
     do {  \
         CUptiResult _status = (call);  \
-        LOGCUPTICALL("\t" #call "\033[0m\n");  \
+        LOGCUPTICALL("\t" #call "\n");  \
         if (_status != CUPTI_SUCCESS) {  \
-            fprintf(stderr, "\033[31;1mCUPTI Error %d: %s: %d: Error in call to " #call "\033[0m\n", _status, __FILE__, __LINE__);  \
+            ERRDBG("CUPTI Error %d: Error in call to " #call "\n", _status);  \
             EXIT_OR_NOT; \
             handleerror;  \
         }  \

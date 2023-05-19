@@ -14,7 +14,7 @@
 
 #include "lcuda_utils.h"
 #include "cupti_profiler.h"
-#include "debug_comp.h"
+#include "lcuda_debug.h"
 
 typedef struct byte_array_s         byte_array_t;
 typedef struct cuptip_gpu_control_s cuptip_gpu_control_t;
@@ -112,11 +112,9 @@ CUptiResult ( *cuptiFinalizePtr ) (void);
 #define NVPW_CALL( call, handleerror ) \
     do {  \
         NVPA_Status _status = (call);  \
-        LOGCUPTICALL("\t" #call "\033[0m\n");  \
+        LOGCUPTICALL("\t" #call "\n");  \
         if (_status != NVPA_STATUS_SUCCESS) {  \
-            ANSIRED;  \
-            fprintf(stderr, "NVPA Error %d: %s: %d: Error in call to " #call "\n", _status, __FILE__, __LINE__);  \
-            ANSIEND;  \
+            ERRDBG("NVPA Error %d: Error in call to " #call "\n", _status);  \
             EXIT_OR_NOT; \
             handleerror;  \
         }  \

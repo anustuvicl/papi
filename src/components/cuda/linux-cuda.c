@@ -4,9 +4,9 @@
 
 #include <string.h>
 
-#include "debug_comp.h"
 #include "lcuda_common.h"
 #include "lcuda_dispatch.h"
+#include "lcuda_debug.h"
 
 papi_vector_t _cuda_vector;
 

@@ -1,7 +1,7 @@
 #include "lcuda_config.h"
-#include "debug_comp.h"
 #include "lcuda_utils.h"
 #include "lcuda_dispatch.h"
+#include "lcuda_debug.h"
 
 #if defined(API_PERFWORKS)
 #   include "cupti_profiler.h"

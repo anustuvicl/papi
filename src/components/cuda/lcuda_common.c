@@ -3,7 +3,7 @@
 
 #include "lcuda_common.h"
 #include "lcuda_htable.h"
-#include "debug_comp.h"
+#include "lcuda_debug.h"
 
 #define ADDED_EVENTS_INITIAL_CAPACITY 64
 
