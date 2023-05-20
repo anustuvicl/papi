@@ -47,12 +47,12 @@ static int reallocate_array(event_list_t *evt_table)
 
 int insert_event_record(event_list_t *evt_table, const char *evt_name, unsigned int evt_code, int evt_pos)
 {
-    int res;
+    int errno;
 
     // Allocate twice the space if running out
     if (evt_table->count >= evt_table->capacity) {
-        res = reallocate_array(evt_table);
-        if (res != PAPI_OK)
+        errno = reallocate_array(evt_table);
+        if (errno != PAPI_OK)
             goto fn_exit;
     }
     // Insert record in array
@@ -64,16 +64,16 @@ int insert_event_record(event_list_t *evt_table, const char *evt_name, unsigned 
     htable_insert(evt_table->htable, evt_name, &(evt_table->evts[evt_table->count]));
     evt_table->count ++;
 fn_exit:
-    return res;
+    return errno;
 }
 
 int find_event_name(event_list_t *evt_table, const char *evt_name, event_rec_t **found_rec)
 {
-    int res;
+    int errno;
 
     event_rec_t *evt_rec = NULL;
-    res = htable_find(evt_table->htable, evt_name, (void **) &evt_rec);
-    if (res == HTABLE_SUCCESS) {
+    errno = htable_find(evt_table->htable, evt_name, (void **) &evt_rec);
+    if (errno == HTABLE_SUCCESS) {
         *found_rec = evt_rec;
         return PAPI_OK;
     }
@@ -115,27 +115,27 @@ static gpu_occupancy_t global_gpu_bitmask;
 
 static int _devmask_events_get(event_list_t *evt_table, gpu_occupancy_t *bitmask)
 {
-    int res, gpu_id;
+    int errno, gpu_id;
     long i;
     char nv_name[PAPI_2MAX_STR_LEN];
     gpu_occupancy_t acq_mask = 0;
     for (i = 0; i < evt_table->count; i++) {
-        res = tokenize_event_name(evt_table->evts[0].name, nv_name, &gpu_id);
-        if (res != PAPI_OK)
+        errno = tokenize_event_name(evt_table->evts[0].name, nv_name, &gpu_id);
+        if (errno != PAPI_OK)
             goto fn_exit;
         acq_mask |= (1 << gpu_id);
     }
     *bitmask = acq_mask;
 fn_exit:
-    return res;
+    return errno;
 }
 
 int devmask_check_and_acquire(event_list_t *evt_table)
 {
     gpu_occupancy_t bitmask;
-    int res = _devmask_events_get(evt_table, &bitmask);
-    if (res != PAPI_OK)
-        return res;
+    int errno = _devmask_events_get(evt_table, &bitmask);
+    if (errno != PAPI_OK)
+        return errno;
     if (bitmask & global_gpu_bitmask) {
         return PAPI_ECNFLCT;
     }
@@ -146,9 +146,9 @@ int devmask_check_and_acquire(event_list_t *evt_table)
 int devmask_release(event_list_t *evt_table)
 {
     gpu_occupancy_t bitmask;
-    int res = _devmask_events_get(evt_table, &bitmask);
-    if (res != PAPI_OK)
-        return res;
+    int errno = _devmask_events_get(evt_table, &bitmask);
+    if (errno != PAPI_OK)
+        return errno;
     if ((bitmask & global_gpu_bitmask) != bitmask) {
         return PAPI_EMISC;
     }

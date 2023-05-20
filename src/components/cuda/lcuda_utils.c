@@ -205,11 +205,11 @@ static int unload_cupti_common_sym(void)
 
 int util_load_cuda_sym(const char **pdisabled_reason)
 {
-    int res;
-    res = load_cuda_sym();
-    res += load_cudart_sym();
-    res += load_cupti_common_sym();
-    if (res != PAPI_OK) {
+    int papi_errno;
+    papi_errno = load_cuda_sym();
+    papi_errno += load_cudart_sym();
+    papi_errno += load_cupti_common_sym();
+    if (papi_errno != PAPI_OK) {
         *pdisabled_reason = "Unable to load CUDA library functions.";
         return PAPI_ESYS;
     }

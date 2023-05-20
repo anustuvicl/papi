@@ -32,43 +32,43 @@ void cuptid_shutdown(void)
 
 int cuptid_init(const char **pdisabled_reason)
 {
-    int retval;
-    retval = util_load_cuda_sym(pdisabled_reason);
-    if (retval != PAPI_OK) {
+    int papi_errno;
+    papi_errno = util_load_cuda_sym(pdisabled_reason);
+    if (papi_errno != PAPI_OK) {
         goto fn_exit;
     }
 
     if (util_gpu_collection_kind() == GPU_COLLECTION_MIXED) {
         *pdisabled_reason = "No support for systems with mixed compute capabilities, such as CC < 7.0 and CC > 7.0 GPUS.";
-        retval = PAPI_ECMP;
+        papi_errno = PAPI_ECMP;
         goto fn_exit;
     }
 
     if (util_runtime_is_perfworks_api()) {
 
 #if defined(API_PERFWORKS)
-        retval = cuptip_init(pdisabled_reason);
+        papi_errno = cuptip_init(pdisabled_reason);
 #else
         *pdisabled_reason = "PAPI not built with NVIDIA profiler API support.";
-        retval = PAPI_ECMP;
+        papi_errno = PAPI_ECMP;
         goto fn_exit;
 #endif
 
     } else if (util_runtime_is_events_api()) {
 
 #if defined(API_EVENTS)
-        retval = cuptie_init(pdisabled_reason);
+        papi_errno = cuptie_init(pdisabled_reason);
 #else
         *pdisabled_reason = "Unknown events API problem.";
-        retval = PAPI_ECMP;
+        papi_errno = PAPI_ECMP;
 #endif
 
     } else {
         *pdisabled_reason = "CUDA configuration not supported.";
-        retval = PAPI_ECMP;
+        papi_errno = PAPI_ECMP;
     }
 fn_exit:
-    return retval;
+    return papi_errno;
 }
 
 int cuptid_thread_info_init(void **thread_info)

@@ -144,8 +144,8 @@ int main( int argc, char **argv )
     {
         /* PAPI Initialization must occur before any context creation/manipulation. */
         /* This is to ensure PAPI can monitor CUpti library calls.                  */
-        int retval = PAPI_library_init( PAPI_VER_CURRENT );
-        if( retval != PAPI_VER_CURRENT ) {
+        int papi_errno = PAPI_library_init( PAPI_VER_CURRENT );
+        if( papi_errno != PAPI_VER_CURRENT ) {
             fprintf( stderr, "PAPI_library_init failed\n" );
             exit(-1);
         }
@@ -226,7 +226,7 @@ int main( int argc, char **argv )
     long long values[NUM_EVENTS];
     int eventCount;
     int cid=-1;
-    int retval, ee;
+    int papi_errno, ee;
 
     // Find cuda component index.
     int k = PAPI_num_components();                                      // get number of components.
@@ -277,14 +277,14 @@ int main( int argc, char **argv )
         for ( ee=0; ee<numEventNames; ee++ ) {
             // Create a device specific event.
             snprintf( tmpEventName, 64, "%s:device=%d", EventNames[ee], i );
-            retval = PAPI_add_named_event( EventSet, tmpEventName );
-            if (retval==PAPI_OK) {
+            papi_errno = PAPI_add_named_event( EventSet, tmpEventName );
+            if (papi_errno==PAPI_OK) {
                 printf( "Add event success: '%s' GPU %i\n", tmpEventName, i );
                 EventName[eventCount] = (char *)calloc( 64, sizeof(char) );
                 snprintf( EventName[eventCount], 64, "%s", tmpEventName );
                 eventCount++;
             } else {
-                printf( "Add event failure: '%s' GPU %i error=%s\n", tmpEventName, i, PAPI_strerror(retval));
+                printf( "Add event failure: '%s' GPU %i error=%s\n", tmpEventName, i, PAPI_strerror(papi_errno));
             }
         }
     }
@@ -294,8 +294,8 @@ int main( int argc, char **argv )
     CHECK_CU_ERROR(cuCtxSetCurrent(userContext), "cuCtxSetCurrent");
 
     // Invoke PAPI_start().
-    retval = PAPI_start( EventSet );
-    if( retval != PAPI_OK )  fprintf( stderr, "PAPI_start failed, retval=%i [%s].\n", retval, PAPI_strerror(retval));
+    papi_errno = PAPI_start( EventSet );
+    if( papi_errno != PAPI_OK )  fprintf( stderr, "PAPI_start failed, papi_errno=%i [%s].\n", papi_errno, PAPI_strerror(papi_errno));
 #endif
 
     // Start timing and compute on GPU(s)
@@ -346,15 +346,15 @@ int main( int argc, char **argv )
         CHECK_CU_ERROR( cuCtxPopCurrent(&(ctx[i])), "cuCtxPopCurrent" );
     }
 
-    retval = PAPI_stop( EventSet, values );                                         // Stop (will read values).
-    if( retval != PAPI_OK )  fprintf( stderr, "PAPI_stop failed\n" );
+    papi_errno = PAPI_stop( EventSet, values );                                         // Stop (will read values).
+    if( papi_errno != PAPI_OK )  fprintf( stderr, "PAPI_stop failed\n" );
     for( i = 0; i < eventCount; i++ )
         printf( "PAPI counterValue %12lld \t\t --> %s \n", values[i], EventName[i] );
 
-    retval = PAPI_cleanup_eventset( EventSet );
-    if( retval != PAPI_OK )  fprintf( stderr, "PAPI_cleanup_eventset failed\n" );
-    retval = PAPI_destroy_eventset( &EventSet );
-    if( retval != PAPI_OK ) fprintf( stderr, "PAPI_destroy_eventset failed\n" );
+    papi_errno = PAPI_cleanup_eventset( EventSet );
+    if( papi_errno != PAPI_OK )  fprintf( stderr, "PAPI_cleanup_eventset failed\n" );
+    papi_errno = PAPI_destroy_eventset( &EventSet );
+    if( papi_errno != PAPI_OK ) fprintf( stderr, "PAPI_destroy_eventset failed\n" );
     PAPI_shutdown();
 #endif
 

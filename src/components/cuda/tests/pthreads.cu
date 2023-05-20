@@ -54,7 +54,7 @@ void * thread_gpu(void * idx)
     int tid = *((int*) idx);
     int gpuid = tid % numGPUs;
     unsigned long gettid = (unsigned long) pthread_self();
-    int retval, i;
+    int papi_errno, i;
 
     int EventSet = PAPI_NULL;
     long long values[NUM_METRICS];
@@ -67,8 +67,8 @@ void * thread_gpu(void * idx)
     char tmpEventName[64];
     for (i=0; i<NUM_METRICS; i++) {
         snprintf(tmpEventName, 64, "%s:device=%d", test_metrics[i], gpuid);
-        retval = PAPI_add_named_event(EventSet, tmpEventName);
-        if (retval != PAPI_OK) {
+        papi_errno = PAPI_add_named_event(EventSet, tmpEventName);
+        if (papi_errno != PAPI_OK) {
             fprintf(stderr, "Failed to add event %s\n", tmpEventName);
         }
     }
@@ -95,8 +95,8 @@ int main()
     printf("No. of GPUs = %d\n", numGPUs);
     printf("No. of threads to launch = %d\n", NUM_THREADS);
 
-    int retval = PAPI_library_init( PAPI_VER_CURRENT );
-    if( retval != PAPI_VER_CURRENT ) {
+    int papi_errno = PAPI_library_init( PAPI_VER_CURRENT );
+    if( papi_errno != PAPI_VER_CURRENT ) {
         fprintf( stderr, "PAPI_library_init failed\n" );
         exit(-1);
     }

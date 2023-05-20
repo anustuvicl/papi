@@ -104,8 +104,8 @@ int main(int argc, char *argv[]) {
     }
 
     printf("---------------------------\n");
-    int retval = PAPI_library_init( PAPI_VER_CURRENT );
-    if ( retval != PAPI_VER_CURRENT ) {
+    int papi_errno = PAPI_library_init( PAPI_VER_CURRENT );
+    if ( papi_errno != PAPI_VER_CURRENT ) {
         fprintf( stderr, "Please recompile this test program. Installed PAPI has been updated.\n" );
         exit(-1);
     }
@@ -118,7 +118,7 @@ int main(int argc, char *argv[]) {
     {
         int EventSet = PAPI_NULL;
         long long values[NUM_METRICS];
-        int j, res;
+        int j, errno;
         PAPI_CALL(PAPI_create_eventset(&EventSet));
         unsigned int cpu_thread_id = omp_get_thread_num();
         unsigned int num_cpu_threads = omp_get_num_threads();
@@ -130,8 +130,8 @@ int main(int argc, char *argv[]) {
         for (j=0; j<NUM_METRICS; j++) {
             snprintf(tmpEventName, 64, "%s:device=%d", event_names[j], gpu_id);
             fprintf(stderr, "Adding event name %s\n", tmpEventName);
-            res = PAPI_add_named_event( EventSet, tmpEventName );
-            if (res != PAPI_OK) {
+            errno = PAPI_add_named_event( EventSet, tmpEventName );
+            if (errno != PAPI_OK) {
                 fprintf(stderr, "Error adding event %s\n", tmpEventName);
             }
         }

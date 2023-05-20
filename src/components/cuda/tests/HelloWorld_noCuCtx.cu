@@ -52,13 +52,13 @@ __global__ void helloWorld(char*);
 // Host function
 int main(int argc, char** argv)
 {
-	int retval, quiet = 0;
+	int papi_errno, quiet = 0;
     cudaError_t cudaError;
     CUresult cuError; (void) cuError;
 
 	/* PAPI Initialization */
-	retval = PAPI_library_init( PAPI_VER_CURRENT );
-	if( retval != PAPI_VER_CURRENT ) {
+	papi_errno = PAPI_library_init( PAPI_VER_CURRENT );
+	if( papi_errno != PAPI_VER_CURRENT ) {
 		if (!quiet) printf("PAPI init failed\n");
 		test_fail(__FILE__,__LINE__,
 			"PAPI_library_init failed", 0 );
@@ -89,8 +89,8 @@ int main(int argc, char** argv)
 
 	/* convert PAPI native events to PAPI code */
 	for( i = 0; i < NUM_EVENTS; i++ ){
-		retval = PAPI_event_name_to_code( (char *)EventName[i], &events[i] );
-		if( retval != PAPI_OK ) {
+		papi_errno = PAPI_event_name_to_code( (char *)EventName[i], &events[i] );
+		if( papi_errno != PAPI_OK ) {
 			fprintf(stderr, "%s:%s:%i PAPI_event_name_to_code failed for '%s'\n", __FILE__, __func__, __LINE__, EventName[i] );
 			continue;
 		}
@@ -105,19 +105,19 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	retval = PAPI_create_eventset( &EventSet );
-	if( retval != PAPI_OK ) {
+	papi_errno = PAPI_create_eventset( &EventSet );
+	if( papi_errno != PAPI_OK ) {
 		if (!quiet) printf( "PAPI_create_eventset failed\n" );
-		test_fail(__FILE__,__LINE__,"Cannot create eventset",retval);
+		test_fail(__FILE__,__LINE__,"Cannot create eventset",papi_errno);
 	}
 
-    retval = PAPI_add_events( EventSet, events, eventCount );
-	if( retval != PAPI_OK ) {
+    papi_errno = PAPI_add_events( EventSet, events, eventCount );
+	if( papi_errno != PAPI_OK ) {
 		fprintf( stderr, "PAPI_add_events failed\n" );
 	}
 
-	retval = PAPI_start( EventSet );
-	if( retval != PAPI_OK ) {
+	papi_errno = PAPI_start( EventSet );
+	if( papi_errno != PAPI_OK ) {
 		fprintf( stderr, "PAPI_start failed\n" );
 	}
 
@@ -165,24 +165,24 @@ int main(int argc, char** argv)
 	if (!quiet) printf("END: %s\n", str);
 
 #ifdef PAPI
-	retval = PAPI_read( EventSet, values );
-	if( retval != PAPI_OK )
-		fprintf(stderr, "PAPI_read failed, ret=%d (%s)\n", retval, PAPI_strerror(retval) );
+	papi_errno = PAPI_read( EventSet, values );
+	if( papi_errno != PAPI_OK )
+		fprintf(stderr, "PAPI_read failed, ret=%d (%s)\n", papi_errno, PAPI_strerror(papi_errno) );
 
 	for( i = 0; i < eventCount; i++ )
 		if (!quiet) printf( "read: %12lld \t=0X%016llX \t\t --> %s \n", values[i], values[i], EventName[i] );
 
-	retval = PAPI_stop( EventSet, values );
-	if( retval != PAPI_OK )
-		fprintf( stderr, "PAPI_stop failed, retval=%d (%s)\n", retval, PAPI_strerror(retval) );
+	papi_errno = PAPI_stop( EventSet, values );
+	if( papi_errno != PAPI_OK )
+		fprintf( stderr, "PAPI_stop failed, papi_errno=%d (%s)\n", papi_errno, PAPI_strerror(papi_errno) );
 
-	retval = PAPI_cleanup_eventset(EventSet);
-	if( retval != PAPI_OK )
-		fprintf(stderr, "PAPI_cleanup_eventset failed, retval=%d (%s)\n", retval, PAPI_strerror(retval) );
+	papi_errno = PAPI_cleanup_eventset(EventSet);
+	if( papi_errno != PAPI_OK )
+		fprintf(stderr, "PAPI_cleanup_eventset failed, papi_errno=%d (%s)\n", papi_errno, PAPI_strerror(papi_errno) );
 
-	retval = PAPI_destroy_eventset(&EventSet);
-	if (retval != PAPI_OK)
-		fprintf(stderr, "PAPI_destroy_eventset failed, retval=%d (%s)\n", retval, PAPI_strerror(retval) );
+	papi_errno = PAPI_destroy_eventset(&EventSet);
+	if (papi_errno != PAPI_OK)
+		fprintf(stderr, "PAPI_destroy_eventset failed, papi_errno=%d (%s)\n", papi_errno, PAPI_strerror(papi_errno) );
 
 	for( i = 0; i < eventCount; i++ )
 		if (!quiet) printf( "stop: %12lld \t=0X%016llX \t\t --> %s \n", values[i], values[i], EventName[i] );
