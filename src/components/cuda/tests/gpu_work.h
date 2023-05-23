@@ -53,7 +53,7 @@ static void cleanUp(int *h_A, int *h_B, int *h_C, int *h_D, int *d_A, int *d_B, 
         free(h_D);
 }
 
-static void VectorAddSubtract(int N)
+static void VectorAddSubtract(int N, int quiet)
 {
     if (N==0) N = 50000;
     size_t size = N * sizeof(int);
@@ -89,7 +89,7 @@ static void VectorAddSubtract(int N)
     // Invoke kernel
     threadsPerBlock = 256;
     blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
-    fprintf(stderr, "Launching kernel on device %d: blocks %d, thread/block %d\n",
+    if (!quiet) fprintf(stderr, "Launching kernel on device %d: blocks %d, thread/block %d\n",
     device, blocksPerGrid, threadsPerBlock);
 
     VecAdd<<<blocksPerGrid, threadsPerBlock>>>(d_A, d_B, d_C, N);
@@ -100,7 +100,7 @@ static void VectorAddSubtract(int N)
     // h_C contains the result in host memory
     _GW_CALL(cudaMemcpy(h_C, d_C, size, cudaMemcpyDeviceToHost));
     _GW_CALL(cudaMemcpy(h_D, d_D, size, cudaMemcpyDeviceToHost));
-    fprintf(stderr, "Kernel launch complete and mem copied back from device %d\n", device);
+    if (!quiet) fprintf(stderr, "Kernel launch complete and mem copied back from device %d\n", device);
     // Verify result
     for (i = 0; i < N; ++i) {
         sum = h_A[i] + h_B[i];

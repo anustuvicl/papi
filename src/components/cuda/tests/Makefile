@@ -5,8 +5,9 @@ PAPI_CUDA_ROOT ?= $(shell dirname $(shell dirname $(shell which nvcc)))
 PAPI_CUPTI_ROOT ?= $(PAPI_CUDA_ROOT)/extras/CUPTI
 
 TESTS = HelloWorld simpleMultiGPU \
-		pthreads cudaOpenMP test_cuda_component concurrent_profiling \
-		test_multi_read_and_reset test_multipass_event_fail
+		pthreads cudaOpenMP concurrent_profiling \
+		test_multi_read_and_reset test_multipass_event_fail \
+		test_2thr_1gpu_not_allowed
 
 TESTS_NOCTX = concurrent_profiling_noCuCtx pthreads_noCuCtx \
 			  cudaOpenMP_noCuCtx HelloWorld_noCuCtx \
@@ -32,9 +33,6 @@ cuda_tests: $(TESTS) $(TESTS_NOCTX)
 
 %.mac:%.cu
 	$(NVCC) $(INCLUDE) $(NVCFLAGS) -E -c -o $@ $<
-
-test_cuda_component: test_cuda_component.o $(UTILOBJS)
-	$(NVCC) $(NVCFLAGS) -o test_cuda_component test_cuda_component.o $(UTILOBJS) $(PAPILIB) $(CUDALIBS) $(LDFLAGS)
 
 test_multi_read_and_reset: test_multi_read_and_reset.o $(UTILOBJS)
 	$(NVCC) $(NVCFLAGS) -o test_multi_read_and_reset test_multi_read_and_reset.o $(UTILOBJS) $(PAPILIB) $(CUDALIBS) $(LDFLAGS)

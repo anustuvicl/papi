@@ -6,13 +6,15 @@
 #include <papi.h>
 #include <papi_test.h>
 
+#define PRINT(quiet, format, args...) {if (!quiet) {fprintf(stderr, format, ## args);}}
+int quiet;
+
 #define PAPI_CALL(apiFuncCall)                                          \
 do {                                                                           \
     int _status = apiFuncCall;                                         \
     if (_status != PAPI_OK) {                                              \
-        fprintf(stderr, "%s:%d: error %d: function %s failed with error %s.\n",   \
-                __FILE__, __LINE__, _status, #apiFuncCall, PAPI_strerror(_status));\
-        exit(EXIT_FAILURE);                                                    \
+        fprintf(stderr, "error: function %s failed.", #apiFuncCall);  \
+        test_fail(__FILE__, __LINE__, "", _status);  \
     }                                                                          \
 } while (0)
 
@@ -37,23 +39,23 @@ do {                                                                           \
 } while (0)
 
 #define NUM_THREADS 2
-// User metrics to profile
-#define NUM_METRICS 2
-const char *test_metrics[] = {
-    "cuda:::smsp__warps_launched.sum",
-    "cuda:::dram__bytes_write.sum",
-};
 
 int numGPUs;
+int g_event_count;
+char **g_evt_names;
 
-pthread_t tidarr[NUM_THREADS];
-CUcontext cuCtx[NUM_THREADS];
-pthread_mutex_t lock;
+typedef struct pthread_params_s {
+    pthread_t tid;
+    CUcontext cuCtx;
+    int idx;
+    int retval;
+} pthread_params_t;
 
-void * thread_gpu(void * idx)
+void *thread_gpu(void * ptinfo)
 {
-    int tid = *((int*) idx);
-    int gpuid = tid % numGPUs;
+    pthread_params_t *tinfo = (pthread_params_t *) ptinfo;
+    int idx = tinfo->idx;
+    int gpuid = idx % numGPUs;
     unsigned long gettid = (unsigned long) pthread_self();
     int papi_errno;
 
@@ -61,44 +63,56 @@ void * thread_gpu(void * idx)
     long long values[1];
     PAPI_CALL(PAPI_create_eventset(&EventSet));
 
-    DRIVER_API_CALL(cuCtxSetCurrent(cuCtx[tid]));
-    fprintf(stderr, "This is idx %d thread %lu - using GPU %d context %p!\n",
-            tid, gettid, gpuid, cuCtx[tid]);
+    DRIVER_API_CALL(cuCtxSetCurrent(tinfo->cuCtx));
+    PRINT(quiet, "This is idx %d thread %lu - using GPU %d context %p!\n",
+            idx, gettid, gpuid, tinfo->cuCtx);
 
-    char tmpEventName[64];
-    snprintf(tmpEventName, 64, "%s:device=%d", test_metrics[tid], 0);
-    papi_errno = PAPI_add_named_event(EventSet, tmpEventName);
+    papi_errno = PAPI_add_named_event(EventSet, g_evt_names[idx]);
     if (papi_errno != PAPI_OK) {
-        fprintf(stderr, "Failed to add event %s\n", tmpEventName);
+        fprintf(stderr, "Failed to add event %s\n", g_evt_names[idx]);
+        test_skip(__FILE__, __LINE__, "", 0);
     }
 
     papi_errno = PAPI_start(EventSet);
     if (papi_errno == PAPI_ECNFLCT) {
-        test_pass(__FILE__);
+        PRINT(quiet, "Thread %d was not allowed to start profiling on same GPU.\n", tinfo->idx);
+        tinfo->retval = papi_errno;
         return NULL;
     }
-    VectorAddSubtract(5000000*(tid+1));  // gpu work
+    VectorAddSubtract(5000000*(idx+1), quiet);  // gpu work
 
     PAPI_CALL(PAPI_stop(EventSet, values));
 
-    printf("User measured values in thread id %d.\n", tid);
-    snprintf(tmpEventName, 64, "%s:device=%d", test_metrics[tid], gpuid);
-    printf("%s\t\t%lld\n", tmpEventName, values[0]);
+    PRINT(quiet, "User measured values in thread id %d.\n", idx);
+    PRINT(quiet, "%s\t\t%lld\n", g_evt_names[idx], values[0]);
+    tinfo->retval = PAPI_OK;
     return NULL;
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    char *test_quiet = getenv("PAPI_CUDA_TEST_QUIET");
+    quiet = 0;
+    if (test_quiet)
+        quiet = (int) strtol(test_quiet, (char**) NULL, 10);
+    g_event_count = argc - 1;
+    /* if no events passed at command line, just report test skipped. */
+    if (g_event_count == 0) {
+        fprintf(stderr, "No eventnames specified at command line.\n");
+        test_skip(__FILE__, __LINE__, "", 0);
+    }
+    g_evt_names = argv + 1;
+
     int rc, i;
-    int tid[NUM_THREADS];
+    pthread_params_t data[NUM_THREADS];
+
     RUNTIME_API_CALL(cudaGetDeviceCount(&numGPUs));
-    printf("No. of GPUs = %d\n", numGPUs);
-    printf("No. of threads to launch = %d\n", NUM_THREADS);
+    PRINT(quiet, "No. of GPUs = %d\n", numGPUs);
+    PRINT(quiet, "No. of threads to launch = %d\n", NUM_THREADS);
 
     int papi_errno = PAPI_library_init( PAPI_VER_CURRENT );
     if( papi_errno != PAPI_VER_CURRENT ) {
-        fprintf( stderr, "PAPI_library_init failed\n" );
-        exit(-1);
+        test_fail(__FILE__, __LINE__, "PAPI_library_init failed.", 0);
     }
     // Point PAPI to function that gets the thread id
     PAPI_CALL(PAPI_thread_init((unsigned long (*)(void)) pthread_self));
@@ -106,30 +120,39 @@ int main()
     // Launch the threads
     for(i = 0; i < NUM_THREADS; i++)
     {
-        tid[i] = i;
-        DRIVER_API_CALL(cuCtxCreate(&(cuCtx[i]), 0, 0));
-        DRIVER_API_CALL(cuCtxPopCurrent(&(cuCtx[i])));
+        data[i].idx = i;
+        DRIVER_API_CALL(cuCtxCreate(&(data[i].cuCtx), 0, 0));
+        DRIVER_API_CALL(cuCtxPopCurrent(&(data[i].cuCtx)));
 
-        rc = pthread_create(&tidarr[i], NULL, thread_gpu, &(tid[i]));
+        rc = pthread_create(&data[i].tid, NULL, thread_gpu, &(data[i]));
         if(rc)
         {
             fprintf(stderr, "\n ERROR: return code from pthread_create is %d \n", rc);
             exit(1);
         }
-        fprintf(stderr, "\n Main thread %lu. Created new thread (%lu) in iteration %d ...\n",
-                (unsigned long)pthread_self(), (unsigned long)tidarr[i], i);
+        PRINT(quiet, "\n Main thread %lu. Created new thread (%lu) in iteration %d ...\n",
+                (unsigned long)pthread_self(), (unsigned long) data[i].tid, i);
     }
 
     // Join all threads when complete
     for (i=0; i<NUM_THREADS; i++) {
-        pthread_join(tidarr[i], NULL);
-        fprintf(stderr, "IDX: %d: TID: %lu: Done! Joined main thread.\n", i, (unsigned long)tidarr[i]);
+        pthread_join(data[i].tid, NULL);
+        PRINT(quiet, "IDX: %d: TID: %lu: Done! Joined main thread.\n", i, (unsigned long)data[i].tid);
     }
 
     // Destroy all CUDA contexts for all threads/GPUs
     for (i=0; i<NUM_THREADS; i++) {
-        DRIVER_API_CALL(cuCtxDestroy(cuCtx[i]));
+        DRIVER_API_CALL(cuCtxDestroy(data[i].cuCtx));
     }
-    printf("Main thread exit!\n");
+
+    // Check test pass/fail
+    int retval = PAPI_OK;
+    for (i=0; i<NUM_THREADS; i++) {
+        retval += data[i].retval;
+    }
+    if (retval == PAPI_ECNFLCT)
+        test_pass(__FILE__);
+    else
+        test_fail(__FILE__, __LINE__, "Test condition not satisfied.", 0);
     return 0;
 }

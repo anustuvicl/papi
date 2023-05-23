@@ -31,18 +31,22 @@
  */
 
 #include <papi.h>
+#include "papi_test.h"
+
 #include "gpu_work.h"
 #include <omp.h>
 #include <stdio.h>  // stdio functions are used since C++ streams aren't necessarily thread safe
 
+#define PRINT(quiet, format, args...) {if (!quiet) {fprintf(stderr, format, ## args);}}
+int quiet;
+
 #define PAPI_CALL(apiFuncCall)                                          \
 do {                                                                           \
-	int _status = apiFuncCall;                                         \
-	if (_status != PAPI_OK) {                                              \
-		fprintf(stderr, "%s:%d: error %d: function %s failed with error %s.\n",   \
-				__FILE__, __LINE__, _status, #apiFuncCall, PAPI_strerror(_status));\
-		exit(EXIT_FAILURE);                                                    \
-	}                                                                          \
+    int _status = apiFuncCall;                                         \
+    if (_status != PAPI_OK) {                                              \
+        fprintf(stderr, "error: function %s failed.", #apiFuncCall);  \
+        test_fail(__FILE__, __LINE__, "", _status);  \
+    }                                                                          \
 } while (0)
 
 #define RUNTIME_API_CALL(apiFuncCall)                                          \
@@ -65,56 +69,62 @@ do {                                                                           \
 	}                                                                          \
 } while (0)
 
-#define NUM_THREADS 8
-// User metrics to profile
-#define NUM_METRICS 2
-const char *event_names[] = {
-	"cuda:::smsp__warps_launched.sum",
-	"cuda:::dram__bytes_write.sum",  //.pct_of_peak_burst_frame",
-};
+#define MAX_THREADS (32)
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
+    char *test_quiet = getenv("PAPI_CUDA_TEST_QUIET");
+    quiet = 0;
+    if (test_quiet)
+        quiet = (int) strtol(test_quiet, (char**) NULL, 10);
+
+    int event_count = argc - 1;
+    /* if no events passed at command line, just report test skipped. */
+    if (event_count == 0) {
+        fprintf(stderr, "No eventnames specified at command line.\n");
+        test_skip(__FILE__, __LINE__, "", 0);
+    }
+
     int num_gpus = 0, i;
-
-    printf("%s Starting...\n\n", argv[0]);
 
     RUNTIME_API_CALL(cudaGetDeviceCount(&num_gpus));  // determine the number of CUDA capable GPUs
 
     if (num_gpus < 1) {
-        printf("no CUDA capable devices were detected\n");
-        return 1;
+        fprintf(stderr, "no CUDA capable devices were detected\n");
+        test_skip(__FILE__, __LINE__, "", 0);
     }
+    if (num_gpus > MAX_THREADS)
+        num_gpus = MAX_THREADS;
 
     /////////////////////////////////////////////////////////////////
     // display CPU and GPU configuration
     //
-    printf("number of host CPUs:\t%d\n", omp_get_num_procs());
-    printf("number of CUDA devices:\t%d\n", num_gpus);
+    PRINT(quiet, "number of host CPUs:\t%d\n", omp_get_num_procs());
+    PRINT(quiet, "number of CUDA devices:\t%d\n", num_gpus);
 
     for (i = 0; i < num_gpus; i++) {
         cudaDeviceProp dprop;
         RUNTIME_API_CALL(cudaGetDeviceProperties(&dprop, i));
-        printf("   %d: %s\n", i, dprop.name);
+        PRINT(quiet, "   %d: %s\n", i, dprop.name);
 
         RUNTIME_API_CALL(cudaSetDevice(i));
         RUNTIME_API_CALL(cudaFree(NULL));
     }
 
-    printf("---------------------------\n");
+    PRINT(quiet, "---------------------------\n");
     int papi_errno = PAPI_library_init( PAPI_VER_CURRENT );
     if( papi_errno != PAPI_VER_CURRENT ) {
-        fprintf( stderr, "Please recompile this test program. Installed PAPI has been updated.\n" );
-        exit(-1);
+        test_fail(__FILE__, __LINE__, "PAPI_library_init failed.", 0);
     }
     PAPI_CALL(PAPI_thread_init((unsigned long (*)(void)) omp_get_thread_num));
     omp_lock_t lock;
     omp_init_lock(&lock);
 
-    omp_set_num_threads(NUM_THREADS);  // create as many CPU threads as there are CUDA devices
+    omp_set_num_threads(num_gpus);  // create as many CPU threads as there are CUDA devices
 #pragma omp parallel
     {
         int EventSet = PAPI_NULL;
-        long long values[NUM_METRICS];
+        long long values[MAX_THREADS];
         int j, errno;
         PAPI_CALL(PAPI_create_eventset(&EventSet));
         unsigned int cpu_thread_id = omp_get_thread_num();
@@ -122,34 +132,37 @@ int main(int argc, char *argv[]) {
         int gpu_id = cpu_thread_id % num_gpus;
 
         RUNTIME_API_CALL(cudaSetDevice(gpu_id));
-        printf("CPU thread %d (of %d) uses CUDA device %d @ eventset %d\n", cpu_thread_id, num_cpu_threads, gpu_id, EventSet);
+        PRINT(quiet, "CPU thread %d (of %d) uses CUDA device %d @ eventset %d\n", cpu_thread_id, num_cpu_threads, gpu_id, EventSet);
         char tmpEventName[64];
-        for (j=0; j<NUM_METRICS; j++) {
-            snprintf(tmpEventName, 64, "%s:device=%d", event_names[j], gpu_id);
-            fprintf(stderr, "Adding event name %s\n", tmpEventName);
+        for (j = 0; j < event_count; j++) {
+            snprintf(tmpEventName, 64, "%s:device=%d", argv[j+1], gpu_id);
+            PRINT(quiet, "Adding event name %s\n", tmpEventName);
             errno = PAPI_add_named_event( EventSet, tmpEventName );
             if (errno != PAPI_OK) {
                 fprintf(stderr, "Error adding event %s\n", tmpEventName);
+                test_skip(__FILE__, __LINE__, "", 0);
             }
         }
-        PAPI_start(EventSet);
+        PAPI_CALL(PAPI_start(EventSet));
 
-        VectorAddSubtract(50000*(cpu_thread_id+1));  // gpu work
+        VectorAddSubtract(50000*(cpu_thread_id+1), quiet);  // gpu work
 
-        PAPI_stop(EventSet, values);
-        printf("User measured values.\n");
-        for (j=0; j<NUM_METRICS; j++) {
-            snprintf(tmpEventName, 64, "%s:device=%d", event_names[j], gpu_id);
-            printf("%s\t\t%lld\n", tmpEventName, values[j]);
+        PAPI_CALL(PAPI_stop(EventSet, values));
+
+        PRINT(quiet, "User measured values.\n");
+        for (j = 0; j < event_count; j++) {
+            snprintf(tmpEventName, 64, "%s:device=%d", argv[j+1], gpu_id);
+            PRINT(quiet, "%s\t\t%lld\n", tmpEventName, values[j]);
         }
     }  // omp parallel region end
 
-    printf("---------------------------\n");
+    PRINT(quiet, "---------------------------\n");
 
     if (cudaSuccess != cudaGetLastError())
-        printf("%s\n", cudaGetErrorString(cudaGetLastError()));
+        fprintf(stderr, "%s\n", cudaGetErrorString(cudaGetLastError()));
 
     omp_destroy_lock(&lock);
     PAPI_shutdown();
+    test_pass(__FILE__);
     return 0;
 }

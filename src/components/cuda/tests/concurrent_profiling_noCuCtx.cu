@@ -29,6 +29,7 @@
 
 extern "C" {
     #include <papi.h>
+    #include "papi_test.h"
 }
 // Standard CUDA, CUPTI, Profiler, NVPW headers
 #include "cuda.h"
@@ -36,11 +37,7 @@ extern "C" {
 // Standard STL headers
 #include <chrono>
 #include <cstdint>
-#include <iostream>
-
-using ::std::cerr;
-using ::std::cout;
-using ::std::endl;
+#include <cstdio>
 
 #include <string>
 using ::std::string;
@@ -51,13 +48,15 @@ using ::std::thread;
 #include <vector>
 using ::std::vector;
 
+#define PRINT(quiet, format, args...) {if (!quiet) {fprintf(stderr, format, ## args);}}
+int quiet;
+
 #define PAPI_CALL(apiFuncCall)                                          \
 do {                                                                           \
     int _status = apiFuncCall;                                         \
     if (_status != PAPI_OK) {                                              \
-        fprintf(stderr, "%s:%d: error: function %s failed with error %d(%s).\n",   \
-                __FILE__, __LINE__, #apiFuncCall, _status, PAPI_strerror(_status));\
-        exit(EXIT_FAILURE);                                                    \
+        fprintf(stderr, "error: function %s failed.", #apiFuncCall);  \
+        test_fail(__FILE__, __LINE__, "", _status);  \
     }                                                                          \
 } while (0)
 
@@ -142,36 +141,40 @@ void profileKernels(perDeviceData &d,
                     vector<string> const &metricNames,
                     char const * const rangeName, bool serial)
 {
-    int eventset = PAPI_NULL, i;
+    int eventset = PAPI_NULL, i, papi_errno;
     PAPI_CALL(PAPI_create_eventset(&eventset));
     // Switch to desired device
     RUNTIME_API_CALL(cudaSetDevice(d.config.device));  // Orig code has mistake here
     string evt_name;
     for (i = 0; i < metricNames.size(); i++) {
         evt_name = metricNames[i] + std::to_string(d.config.device);
-        cout<<"Adding event name: " << evt_name << endl;
-        PAPI_CALL(PAPI_add_named_event(eventset, evt_name.c_str()));
+        PRINT(quiet, "Adding event name: %s\n", evt_name.c_str());
+        papi_errno = PAPI_add_named_event(eventset, evt_name.c_str());
+        if (papi_errno != PAPI_OK) {
+            fprintf(stderr, "Failed to add event %s\n", evt_name.c_str());
+            test_skip(__FILE__, __LINE__, "", 0);
+        }
     }
     PAPI_CALL(PAPI_start(eventset));
 
+    for (unsigned int stream = 0; stream < d.streams.size(); stream++)
+    {
+        cudaStream_t streamId = (serial ? 0 : d.streams[stream]);
+        daxpyKernel <<<threadBlocks, threadsPerBlock, 0, streamId>>> (elements[stream], a, d.d_x[stream], d.d_y[stream]);
+    }
+
+    // After launching all work, synchronize all streams
+    if (serial == false)
+    {
         for (unsigned int stream = 0; stream < d.streams.size(); stream++)
         {
-            cudaStream_t streamId = (serial ? 0 : d.streams[stream]);
-            daxpyKernel <<<threadBlocks, threadsPerBlock, 0, streamId>>> (elements[stream], a, d.d_x[stream], d.d_y[stream]);
+            RUNTIME_API_CALL(cudaStreamSynchronize(d.streams[stream]));
         }
-
-        // After launching all work, synchronize all streams
-        if (serial == false)
-        {
-            for (unsigned int stream = 0; stream < d.streams.size(); stream++)
-            {
-                RUNTIME_API_CALL(cudaStreamSynchronize(d.streams[stream]));
-            }
-        }
-        else
-        {
-            RUNTIME_API_CALL(cudaStreamSynchronize(0));
-        }
+    }
+    else
+    {
+        RUNTIME_API_CALL(cudaStreamSynchronize(0));
+    }
     PAPI_CALL(PAPI_stop(eventset, d.values));
     PAPI_CALL(PAPI_cleanup_eventset(eventset));
 }
@@ -179,29 +182,37 @@ void profileKernels(perDeviceData &d,
 void print_measured_values(perDeviceData &d, vector<string> const &metricNames)
 {
     string evt_name;
-    cout << "PAPI event name" << std::string(7, '\t') << "Measured value" << endl;
-    cout << std::string(80, '-') << endl;
+    PRINT(quiet, "PAPI event name\t\t\t\t\t\t\tMeasured value\n");
+    PRINT(quiet, "%s\n", std::string(80, '-').c_str());
     for (int i=0; i < metricNames.size(); i++) {
         evt_name = metricNames[i] + std::to_string(d.config.device);
-        cout << evt_name << "\t\t\t" << d.values[i] << endl;
+        PRINT(quiet, "%s\t\t\t%ld\n", evt_name.c_str(), d.values[i]);
     }
 }
 
-int main(int argc, char * argv[])
+int main(int argc, char **argv)
 {
-    // These two metrics will demonstrate whether kernels within a Range were run serially or concurrently
+    char *test_quiet = getenv("PAPI_CUDA_TEST_QUIET");
+    quiet = 0;
+    if (test_quiet)
+        quiet = (int) strtol(test_quiet, (char**) NULL, 10);
+
+    int event_count = argc - 1;
+    /* if no events passed at command line, just report test skipped. */
+    if (event_count == 0) {
+        fprintf(stderr, "No eventnames specified at command line.\n");
+        test_skip(__FILE__, __LINE__, "", 0);
+    }
+
+    int i;
     vector<string> metricNames;
-    metricNames.push_back("cuda:::sm__cycles_active.sum:device=");
-    metricNames.push_back("cuda:::sm__cycles_elapsed.max:device=");
-    // This metric shows that the same number of flops were executed on each run
-    // Note: PAPI can't measure this with the others as it requires multiple passes to measure as three
-    //       However, it can be measured as a single event.
-    // metricNames.push_back("smsp__sass_thread_inst_executed_op_dfma_pred_on.sum");
+    for (i=0; i < event_count; i++) {
+        metricNames.push_back(argv[i+1]);
+    }
 
     // Initialize the PAPI library
     if (PAPI_library_init(PAPI_VER_CURRENT) != PAPI_VER_CURRENT) {
-        fprintf(stderr, "PAPI_library_init failed.\n");
-        exit(-1);
+        test_fail(__FILE__, __LINE__, "PAPI_library_init failed.", 0);
     }
 
     int numDevices;
@@ -211,7 +222,7 @@ int main(int argc, char * argv[])
     vector<int> device_ids;
 
     // Find all devices capable of running CUPTI Profiling (Compute Capability >= 7.0)
-    for (int i = 0; i < numDevices; i++)
+    for (i = 0; i < numDevices; i++)
     {
         // Get device properties
         int major;
@@ -224,13 +235,13 @@ int main(int argc, char * argv[])
     }
 
     numDevices = device_ids.size();
-    cout << "Found " << numDevices << " compatible devices" << endl;
+    PRINT(quiet, "Found %d compatible devices\n", numDevices);
 
     // Ensure we found at least one device
     if (numDevices == 0)
     {
-        cerr << "No devices detected compatible with CUPTI Profiling (Compute Capability >= 7.0)" << endl;
-        exit(-1);
+        fprintf(stderr, "No devices detected compatible with CUPTI Profiling (Compute Capability >= 7.0)\n");
+        test_skip(__FILE__, __LINE__, "", 0);
     }
 
     // Initialize kernel input to some known numbers
@@ -262,7 +273,7 @@ int main(int argc, char * argv[])
     {
         int device_id = device_ids[device];
         RUNTIME_API_CALL(cudaSetDevice(device_id));
-        cout << "Configuring device " << device_id << endl;
+        PRINT(quiet, "Configuring device %d\n", device_id);
         deviceData[device].deviceID = device_id;
 
         // Required CUPTI Profiling configuration & initialization
@@ -310,13 +321,13 @@ int main(int argc, char * argv[])
     profileKernels(deviceData[0], metricNames, "single_device_serial", true);
 
     auto end_time = ::std::chrono::high_resolution_clock::now();
-    auto elapsed_serial_ms = ::std::chrono::duration_cast<::std::chrono::milliseconds>(end_time - begin_time);
+    int elapsed_serial_ms = ::std::chrono::duration_cast<::std::chrono::milliseconds>(end_time - begin_time).count();
     int numBlocks = 0;
     for (int i = 1; i <= numKernels; i++)
     {
         numBlocks += i;
     }
-    cout << "It took " << elapsed_serial_ms.count() << "ms on the host to profile " << numKernels << " kernels in serial." << endl;
+    PRINT(quiet, "It took %d ms on the host to profile %d  kernels in serial.", elapsed_serial_ms, numKernels);
 
     //
     // Second version - same kernel calls as before on the same device, but now using separate streams for concurrency
@@ -329,9 +340,9 @@ int main(int argc, char * argv[])
     profileKernels(deviceData[0], metricNames, "single_device_async", false);
 
     end_time = ::std::chrono::high_resolution_clock::now();
-    auto elapsed_single_device_ms = ::std::chrono::duration_cast<::std::chrono::milliseconds>(end_time - begin_time);
-    cout << "It took " << elapsed_single_device_ms.count() << "ms on the host to profile " << numKernels << " kernels on a single device on separate streams." << endl;
-    cout << "--> If the separate stream wallclock time is less than the serial version, the streams were profiling concurrently." << endl;
+    int elapsed_single_device_ms = ::std::chrono::duration_cast<::std::chrono::milliseconds>(end_time - begin_time).count();
+    PRINT(quiet, "It took %d ms on the host to profile %d  kernels on a single device on separate streams.", elapsed_single_device_ms, numKernels);
+    PRINT(quiet, "--> If the separate stream wallclock time is less than the serial version, the streams were profiling concurrently.\n");
 
     //
     // Third version - same as the second case, but duplicates the concurrent work across devices to show cross-device concurrency
@@ -341,7 +352,7 @@ int main(int argc, char * argv[])
 
     if (numDevices == 1)
     {
-        cout << "Only one compatible device found; skipping the multi-threaded test." << endl;
+        PRINT(quiet, "Only one compatible device found; skipping the multi-threaded test.\n");
     }
     else
     {
@@ -349,8 +360,7 @@ int main(int argc, char * argv[])
             fprintf(stderr, "Error setting thread id function.\n");
             exit(-1);
         }
-
-        cout << "Running on " << numDevices << " devices, one thread per device." << endl;
+        PRINT(quiet, "Running on %d devices, one thread per device.\n", numDevices);
 
         // Time creation of the same multiple streams (on multiple devices, if possible)
         vector<::std::thread> threads;
@@ -370,11 +380,11 @@ int main(int argc, char * argv[])
 
         // Record time used when launching on multiple devices
         end_time = ::std::chrono::high_resolution_clock::now();
-        auto elapsed_multiple_device_ms = ::std::chrono::duration_cast<::std::chrono::milliseconds>(end_time - begin_time);
-        cout << "It took " << elapsed_multiple_device_ms.count() << "ms on the host to profile the same " << numKernels << " kernels on each of the " << numDevices << " devices in parallel" << endl;
-        cout << "--> Wallclock ratio of parallel device launch to single device launch is " << elapsed_multiple_device_ms.count() / static_cast<double>(elapsed_single_device_ms.count()) << endl;
-        cout << "--> If the ratio is close to 1, that means there was little overhead to profile in parallel on multiple devices compared to profiling on a single device." << endl;
-        cout << "--> If the devices have different performance, the ratio may not be close to one, and this should be limited by the slowest device." << endl;
+        int elapsed_multiple_device_ms = ::std::chrono::duration_cast<::std::chrono::milliseconds>(end_time - begin_time).count();
+        PRINT(quiet, "It took %d ms on the host to profile the same %d kernels on each of the %d devices in parallel\n", elapsed_multiple_device_ms, numKernels, numDevices);
+        PRINT(quiet, "--> Wallclock ratio of parallel device launch to single device launch is %ld\n", elapsed_multiple_device_ms / (double) elapsed_single_device_ms);
+        PRINT(quiet, "--> If the ratio is close to 1, that means there was little overhead to profile in parallel on multiple devices compared to profiling on a single device.\n");
+        PRINT(quiet, "--> If the devices have different performance, the ratio may not be close to one, and this should be limited by the slowest device.\n");
     }
 
     // Free stream memory for each device
@@ -388,24 +398,23 @@ int main(int argc, char * argv[])
     }
 
     // Display metric values
-    cout << endl << "Metrics for device #0:" << endl;
-    cout << "Look at the sm__cycles_elapsed.max values for each test." << endl;
-    cout << "This value represents the time spent on device to run the kernels in each case, and should be longest for the serial range, and roughly equal for the single and multi device concurrent ranges." << endl;
-    // PrintMetricValues(deviceData[0].config.chipName, deviceData[0].counterDataImage, metricNames);
+    PRINT(quiet, "\nMetrics for device #0:\n");
+    PRINT(quiet, "Look at the sm__cycles_elapsed.max values for each test.\n");
+    PRINT(quiet, "This value represents the time spent on device to run the kernels in each case, and should be longest for the serial range, and roughly equal for the single and multi device concurrent ranges.\n");
     print_measured_values(deviceData[0], metricNames);
 
     // Only display next device info if needed
     if (numDevices > 1)
     {
-        cout << endl << "Metrics for the remaining devices only display the multi device async case and should all be similar to the first device's values if the device has similar performance characteristics." << endl;
-        cout << "If devices have different performance characteristics, the runtime cycles calculation may vary by device." << endl;
+        PRINT(quiet, "\nMetrics for the remaining devices only display the multi device async case and should all be similar to the first device's values if the device has similar performance characteristics.\n");
+        PRINT(quiet, "If devices have different performance characteristics, the runtime cycles calculation may vary by device.\n");
     }
     for (int i = 1; i < numDevices; i++)
     {
-        cout << endl << "Metrics for device #" << i << ":" << endl;
-        // PrintMetricValues(deviceData[i].config.chipName, deviceData[i].counterDataImage, metricNames);
+        PRINT(quiet, "\nMetrics for device #%d:\n", i);
         print_measured_values(deviceData[i], metricNames);
     }
     PAPI_shutdown();
+    test_pass(__FILE__);
     return 0;
 }

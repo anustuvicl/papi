@@ -4,21 +4,17 @@
 
 #define PASS 1
 #define FAIL 0
+#define MAX_EVENT_COUNT (32)
+#define PRINT(quiet, format, args...) {if (!quiet) {fprintf(stderr, format, ## args);}}
+int quiet;
 
-int numEvents=3;
-char const *EventName[] = {
-    "cuda:::smsp__warps_launched.sum:device=0",
-    "cuda:::dram__bytes_write.sum:device=0",
-    "cuda:::gpu__compute_memory_access_throughput_internal_activity.max.pct_of_peak_sustained_elapsed:device=0"
-};
-
-int test_PAPI_add_named_event(int *EventSet) {
+int test_PAPI_add_named_event(int *EventSet, int numEvents, char **EventName) {
     int i, papi_errno;
-    fprintf(stderr, "LOG: %s: Entering.\n", __func__);
+    PRINT(quiet, "LOG: %s: Entering.\n", __func__);
     for (i=0; i<numEvents; i++) {
         papi_errno = PAPI_add_named_event(*EventSet, EventName[i]);
         if (papi_errno != PAPI_OK) {
-            fprintf(stderr, "Error %d: Failed to add event %s\n", papi_errno, EventName[i]);
+            PRINT(quiet, "Error %d: Failed to add event %s\n", papi_errno, EventName[i]);
         }
     }
     if (papi_errno == PAPI_EMULPASS)
@@ -26,19 +22,19 @@ int test_PAPI_add_named_event(int *EventSet) {
     return FAIL;
 }
 
-int test_PAPI_add_event(int *EventSet) {
+int test_PAPI_add_event(int *EventSet, int numEvents, char **EventName) {
     int event, i, papi_errno;
-    fprintf(stderr, "LOG: %s: Entering.\n", __func__);
+    PRINT(quiet, "LOG: %s: Entering.\n", __func__);
 
     for (i=0; i<numEvents; i++) {
         papi_errno = PAPI_event_name_to_code(EventName[i], &event);
         if (papi_errno != PAPI_OK) {
-            fprintf(stderr, "Error %d: Error in name to code.\n", papi_errno);
+            PRINT(quiet, "Error %d: Error in name to code.\n", papi_errno);
             goto fail;
         }
         papi_errno = PAPI_add_event(*EventSet, event);
         if (papi_errno != PAPI_OK) {
-            fprintf(stderr, "Error %d: Failed to add event %s\n", papi_errno, EventName[i]);
+            PRINT(quiet, "Error %d: Failed to add event %s\n", papi_errno, EventName[i]);
         }
     }
     if (papi_errno == PAPI_EMULPASS)
@@ -47,61 +43,107 @@ fail:
     return FAIL;
 }
 
-int test_PAPI_add_events(int *EventSet) {
+int test_PAPI_add_events(int *EventSet, int numEvents, char **EventName) {
     int papi_errno, i;
-    fprintf(stderr, "LOG: %s: Entering.\n", __func__);
+    PRINT(quiet, "LOG: %s: Entering.\n", __func__);
 
-    int events[numEvents];
+    int events[MAX_EVENT_COUNT];
 
     for (i=0; i<numEvents; i++) {
         papi_errno = PAPI_event_name_to_code(EventName[i], &events[i]);
         if (papi_errno != PAPI_OK) {
-            fprintf(stderr, "Error %d: Error in name to code.\n", papi_errno);
+            PRINT(quiet, "Error %d: Error in name to code.\n", papi_errno);
             goto fail;
         }
     }
     papi_errno = PAPI_add_events(*EventSet, events, numEvents);
     if (papi_errno != PAPI_OK) {
-        fprintf(stderr, "Error %d: Failed to add %d events\n", papi_errno, numEvents);
+        PRINT(quiet, "Error %d: Failed to add %d events\n", papi_errno, numEvents);
     }
-    if (papi_errno == 2)        // Returns index at which error occurred.
+    if (papi_errno < numEvents)        // Returns index at which error occurred.
         return PASS;
 fail:
     return FAIL;
 }
 
-int main() {
+int main(int argc, char **argv)
+{
     int papi_errno, pass;
     int event_set;
+
+    char *test_quiet = getenv("PAPI_CUDA_TEST_QUIET");
+    quiet = 0;
+    if (test_quiet)
+        quiet = (int) strtol(test_quiet, (char**) NULL, 10);
+
+    int event_count = argc - 1;
+
+    /* if no events passed at command line, just report test skipped. */
+    if (event_count == 0) {
+        fprintf(stderr, "No eventnames specified at command line.\n");
+        test_skip(__FILE__, __LINE__, "", 0);
+    }
+
     papi_errno = PAPI_library_init( PAPI_VER_CURRENT );
-    if (papi_errno != PAPI_VER_CURRENT) test_fail(__FILE__, __LINE__, "PAPI_library_init() failed", 0);
+    if (papi_errno != PAPI_VER_CURRENT) {
+        test_fail(__FILE__, __LINE__, "PAPI_library_init() failed", 0);
+    }
 
     papi_errno = PAPI_get_component_index("cuda");
-    if (papi_errno < 0 ) test_fail(__FILE__, __LINE__, "CUDA_PERF component not configured", 0);
+    if (papi_errno < 0 ) {
+        test_fail(__FILE__, __LINE__, "CUDA component not configured", 0);
+    }
 
     event_set = PAPI_NULL;
     papi_errno = PAPI_create_eventset( &event_set );
-    if (papi_errno != PAPI_OK) test_fail(__FILE__, __LINE__, "PAPI_create_eventset() failed!", 0);
+    if (papi_errno != PAPI_OK) {
+        test_fail(__FILE__, __LINE__, "PAPI_create_eventset() failed!", 0);
+    }
 
-    pass = test_PAPI_add_event(&event_set);
+    pass = test_PAPI_add_event(&event_set, argc-1, argv+1);
     papi_errno = PAPI_cleanup_eventset(event_set);
+    if (papi_errno != PAPI_OK) {
+        test_fail(__FILE__, __LINE__, "PAPI_cleanup_eventset() failed!", 0);
+    }
+
     papi_errno = PAPI_destroy_eventset(&event_set);
+    if (papi_errno != PAPI_OK) {
+        test_fail(__FILE__, __LINE__, "PAPI_destroy_eventset() failed!", 0);
+    }
 
     event_set = PAPI_NULL;
     papi_errno = PAPI_create_eventset( &event_set );
-    if (papi_errno != PAPI_OK) test_fail(__FILE__, __LINE__, "PAPI_create_eventset() failed!", 0);
+    if (papi_errno != PAPI_OK) {
+        test_fail(__FILE__, __LINE__, "PAPI_create_eventset() failed!", 0);
+    }
 
-    pass += test_PAPI_add_named_event(&event_set);
+    pass += test_PAPI_add_named_event(&event_set, argc-1, argv+1);
     papi_errno = PAPI_cleanup_eventset(event_set);
+    if (papi_errno != PAPI_OK) {
+        test_fail(__FILE__, __LINE__, "PAPI_cleanup_eventset() failed!", 0);
+    }
+
     papi_errno = PAPI_destroy_eventset(&event_set);
+    if (papi_errno != PAPI_OK) {
+        test_fail(__FILE__, __LINE__, "PAPI_destroy_eventset() failed!", 0);
+    }
 
     event_set = PAPI_NULL;
     papi_errno = PAPI_create_eventset( &event_set );
-    if (papi_errno != PAPI_OK) test_fail(__FILE__, __LINE__, "PAPI_create_eventset() failed!", 0);
+    if (papi_errno != PAPI_OK) {
+        test_fail(__FILE__, __LINE__, "PAPI_create_eventset() failed!", 0);
+    }
 
-    pass += test_PAPI_add_events(&event_set);
+    pass += test_PAPI_add_events(&event_set, argc-1, argv+1);
     papi_errno = PAPI_cleanup_eventset(event_set);
+    if (papi_errno != PAPI_OK) {
+        test_fail(__FILE__, __LINE__, "PAPI_cleanup_eventset() failed!", 0);
+    }
+
     papi_errno = PAPI_destroy_eventset(&event_set);
+    if (papi_errno != PAPI_OK) {
+        test_fail(__FILE__, __LINE__, "PAPI_destroy_eventset() failed!", 0);
+    }
 
     if (pass != 3)
         test_fail(__FILE__, __LINE__, "CUDA framework multipass event test failed.", 0);

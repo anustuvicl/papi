@@ -37,13 +37,14 @@
 
 #include <cuda.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "papi.h"
 #include "papi_test.h"
 
-#define NUM_EVENTS 1
 #define PAPI 1
 #define STEP_BY_STEP_DEBUG 0 /* helps debug CUcontext issues. */
+#define PRINT(quiet, format, args...) {if (!quiet) {fprintf(stderr, format, ## args);}}
 
 // Prototypes
 __global__ void helloWorld(char*);
@@ -57,55 +58,42 @@ int main(int argc, char** argv)
     cudaError_t cudaError;
     CUresult cuError; (void) cuError;
 
+	char *test_quiet = getenv("PAPI_CUDA_TEST_QUIET");
+    if (test_quiet)
+        quiet = (int) strtol(test_quiet, (char**) NULL, 10);
+
 	/* PAPI Initialization */
 	papi_errno = PAPI_library_init( PAPI_VER_CURRENT );
 	if( papi_errno != PAPI_VER_CURRENT ) {
-		if (!quiet) printf("PAPI init failed\n");
-		test_fail(__FILE__,__LINE__,
-			"PAPI_library_init failed", 0 );
+		test_fail(__FILE__,__LINE__, "PAPI_library_init failed", 0 );
 	}
 
-	if (!quiet) {
-		printf( "PAPI_VERSION     : %4d %6d %7d\n",
-			PAPI_VERSION_MAJOR( PAPI_VERSION ),
-			PAPI_VERSION_MINOR( PAPI_VERSION ),
-			PAPI_VERSION_REVISION( PAPI_VERSION ) );
-	}
-
-	/* Set TESTS_QUIET variable */
-	quiet=tests_quiet( argc, argv );
+	printf( "PAPI_VERSION     : %4d %6d %7d\n",
+		PAPI_VERSION_MAJOR( PAPI_VERSION ),
+		PAPI_VERSION_MINOR( PAPI_VERSION ),
+		PAPI_VERSION_REVISION( PAPI_VERSION ) );
 
 #ifdef PAPI
 	int i;
 	int EventSet = PAPI_NULL;
-	long long values[NUM_EVENTS];
-	/* REPLACE THE EVENT NAME 'PAPI_FP_OPS' WITH A CUDA EVENT
-	   FOR THE CUDA DEVICE YOU ARE RUNNING ON.
-	   RUN papi_native_avail to get a list of CUDA events that are
-	   supported on your machine */
-        //char *EventName[] = { "PAPI_FP_OPS" };
-        // char const *EventName[] = { "cuda:::fe__cycles_elapsed.sum:device=0"}; // CUPTI_11 event.
-        char const *EventName[] = { "cuda:::dram__bytes_read.sum:device=0"}; // CUPTI_11 event.
-        // 2 pass var. char const *EventName[] = { "cuda:::dram__bytes.avg.pct_of_peak_burst_elapsed:device=0"};
-	int events[NUM_EVENTS];
-	int eventCount = 0;
+	int eventCount = argc - 1;
 
-	/* convert PAPI native events to PAPI code */
-	for( i = 0; i < NUM_EVENTS; i++ ){
-                papi_errno = PAPI_event_name_to_code( (char *)EventName[i], &events[i] );
-		if( papi_errno != PAPI_OK ) {
-			fprintf(stderr, "%s:%s:%i PAPI_event_name_to_code failed for '%s'\n", __FILE__, __func__, __LINE__, EventName[i] );
-			continue;
-		}
-		eventCount++;
-		if (!quiet) printf( "Name %s --- Code: %#x\n", EventName[i], events[i] );
+	/* if no events passed at command line, just report test skipped. */
+	if (eventCount == 0) {
+		fprintf(stderr, "No eventnames specified at command line.");
+		test_skip(__FILE__, __LINE__, "", 0);
 	}
 
-	/* if we did not find any valid events, just report test failed. */
-	if (eventCount == 0) {
-		if (!quiet) printf( "Test FAILED: no valid events found.\n");
-		test_skip(__FILE__,__LINE__,"No events found",0);
-		return 1;
+	long long *values = (long long *) calloc(eventCount, sizeof (long long));
+	int *events = (int *) calloc(eventCount, sizeof (int));
+	/* convert PAPI native events to PAPI code */
+	for( i = 0; i < eventCount; i++ ){
+        papi_errno = PAPI_event_name_to_code( argv[i+1], &events[i] );
+		if( papi_errno != PAPI_OK ) {
+			fprintf(stderr, "Check event name: %s", argv[i+1] );
+			test_skip(__FILE__, __LINE__, "", 0);
+		}
+        PRINT( quiet, "Name %s --- Code: %#x\n", argv[i+1], events[i] );
 	}
 
     if (STEP_BY_STEP_DEBUG) {
@@ -115,7 +103,6 @@ int main(int argc, char** argv)
 
 	papi_errno = PAPI_create_eventset( &EventSet );
 	if( papi_errno != PAPI_OK ) {
-		if (!quiet) printf( "PAPI_create_eventset failed\n" );
 		test_fail(__FILE__,__LINE__,"Cannot create eventset",papi_errno);
 	}
 
@@ -142,8 +129,12 @@ int main(int argc, char** argv)
     }
 
     papi_errno = PAPI_add_events( EventSet, events, eventCount );
+    if (papi_errno == PAPI_ENOEVNT) {
+        fprintf(stderr, "Event name does not exist for component.");
+        test_skip(__FILE__, __LINE__, "", 0);
+    }
 	if( papi_errno != PAPI_OK ) {
-		fprintf( stderr, "PAPI_add_events failed\n" );
+		test_fail(__FILE__, __LINE__, "PAPI_add_events failed", papi_errno);
 	}
 
     if (STEP_BY_STEP_DEBUG) {
@@ -153,7 +144,7 @@ int main(int argc, char** argv)
 
 	papi_errno = PAPI_start( EventSet );
 	if( papi_errno != PAPI_OK ) {
-		fprintf( stderr, "PAPI_start failed\n" );
+        test_fail(__FILE__, __LINE__, "PAPI_start failed.", papi_errno);
 	}
 
     if (STEP_BY_STEP_DEBUG) {
@@ -174,7 +165,7 @@ int main(int argc, char** argv)
 		str[j] -= j;
 	}
 
-    printf("mangled str=%s\n", str);
+    PRINT(quiet, "mangled str=%s\n", str);
 
 	// allocate memory on the device
 	char *d_str;
@@ -227,13 +218,12 @@ int main(int argc, char** argv)
         fprintf(stderr, "%s:%s:%i after cudaFree() getCtx=%p.\n", __FILE__, __func__, __LINE__, getCtx);
     }
 
-	if (!quiet) printf("END: %s\n", str);
-
 
 #ifdef PAPI
 	papi_errno = PAPI_read( EventSet, values );
-	if( papi_errno != PAPI_OK )
-		fprintf(stderr, "PAPI_read failed, ret=%d (%s)\n", papi_errno, PAPI_strerror(papi_errno) );
+	if( papi_errno != PAPI_OK ) {
+		test_fail(__FILE__, __LINE__, "PAPI_read failed", papi_errno);
+	}
 
     if (STEP_BY_STEP_DEBUG) {
         cuCtxGetCurrent(&getCtx);
@@ -241,11 +231,13 @@ int main(int argc, char** argv)
     }
 
 	for( i = 0; i < eventCount; i++ )
-		if (!quiet) printf( "read: %12lld \t=0X%016llX \t\t --> %s \n", values[i], values[i], EventName[i] );
+		PRINT( quiet, "read: %12lld \t=0X%016llX \t\t --> %s \n", values[i], values[i], argv[i+1] );
 
     papi_errno = cuCtxPopCurrent(&getCtx);
-	if( papi_errno != CUDA_SUCCESS)
+	if( papi_errno != CUDA_SUCCESS) {
 		fprintf( stderr, "cuCtxPopCurrent failed, papi_errno=%d (%s)\n", papi_errno, PAPI_strerror(papi_errno) );
+        exit(1);
+    }
 
     if (STEP_BY_STEP_DEBUG) {
         cuCtxGetCurrent(&getCtx);
@@ -253,8 +245,9 @@ int main(int argc, char** argv)
     }
 
 	papi_errno = PAPI_stop( EventSet, values );
-	if( papi_errno != PAPI_OK )
-		fprintf( stderr, "PAPI_stop failed, papi_errno=%d (%s)\n", papi_errno, PAPI_strerror(papi_errno) );
+	if( papi_errno != PAPI_OK ) {
+		test_fail(__FILE__, __LINE__, "PAPI_stop failed", papi_errno);
+    }
 
     if (STEP_BY_STEP_DEBUG) {
         cuCtxGetCurrent(&getCtx);
@@ -262,8 +255,9 @@ int main(int argc, char** argv)
     }
 
 	papi_errno = PAPI_cleanup_eventset(EventSet);
-	if( papi_errno != PAPI_OK )
-		fprintf(stderr, "PAPI_cleanup_eventset failed, papi_errno=%d (%s)\n", papi_errno, PAPI_strerror(papi_errno) );
+	if( papi_errno != PAPI_OK ) {
+		test_fail(__FILE__, __LINE__, "PAPI_cleanup_eventset failed", papi_errno);
+    }
 
     if (STEP_BY_STEP_DEBUG) {
         cuCtxGetCurrent(&getCtx);
@@ -271,8 +265,9 @@ int main(int argc, char** argv)
     }
 
 	papi_errno = PAPI_destroy_eventset(&EventSet);
-	if (papi_errno != PAPI_OK)
-		fprintf(stderr, "PAPI_destroy_eventset failed, papi_errno=%d (%s)\n", papi_errno, PAPI_strerror(papi_errno) );
+	if (papi_errno != PAPI_OK) {
+		test_fail(__FILE__, __LINE__, "PAPI_destroy_eventset failed", papi_errno);
+    }
 
     if (STEP_BY_STEP_DEBUG) {
         cuCtxGetCurrent(&getCtx);
@@ -281,7 +276,7 @@ int main(int argc, char** argv)
 
 
 	for( i = 0; i < eventCount; i++ )
-		if (!quiet) printf( "stop: %12lld \t=0X%016llX \t\t --> %s \n", values[i], values[i], EventName[i] );
+		PRINT( quiet, "stop: %12lld \t=0X%016llX \t\t --> %s \n", values[i], values[i], argv[i+1] );
 #endif
 
     if (STEP_BY_STEP_DEBUG) {
