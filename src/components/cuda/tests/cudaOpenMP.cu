@@ -94,9 +94,6 @@ int main(int argc, char *argv[])
         fprintf(stderr, "no CUDA capable devices were detected\n");
         test_skip(__FILE__, __LINE__, "", 0);
     }
-    if (num_gpus > MAX_THREADS)
-        num_gpus = MAX_THREADS;
-
     /////////////////////////////////////////////////////////////////
     // display CPU and GPU configuration
     //
@@ -108,8 +105,9 @@ int main(int argc, char *argv[])
         RUNTIME_API_CALL(cudaGetDeviceProperties(&dprop, i));
         PRINT(quiet, "   %d: %s\n", i, dprop.name);
     }
+    int num_threads = (num_gpus > MAX_THREADS) ? MAX_THREADS : num_gpus;
     // Create a gpu context for every thread
-    for (i=0; i < num_gpus; i++) {
+    for (i=0; i < num_threads; i++) {
         DRIVER_API_CALL(cuCtxCreate(&(ctx_arr[i]), 0, i % num_gpus));  // "% num_gpus" allows more CPU threads than GPU devices
         DRIVER_API_CALL(cuCtxPopCurrent(&(ctx_arr[i])));
     }
@@ -123,7 +121,8 @@ int main(int argc, char *argv[])
     omp_lock_t lock;
     omp_init_lock(&lock);
 
-    omp_set_num_threads(num_gpus);  // create as many CPU threads as there are CUDA devices
+    PRINT(quiet, "Launching %d threads.\n", num_threads);
+    omp_set_num_threads(num_threads);  // create as many CPU threads as there are CUDA devices
 #pragma omp parallel
     {
         int EventSet = PAPI_NULL;
@@ -132,6 +131,7 @@ int main(int argc, char *argv[])
         PAPI_CALL(PAPI_create_eventset(&EventSet));
         unsigned int cpu_thread_id = omp_get_thread_num();
         unsigned int num_cpu_threads = omp_get_num_threads();
+        PRINT(quiet, "cpu_thread_id %u, num_cpu_threads %u, num_threads %d, num_gpus %d\n", cpu_thread_id, num_cpu_threads, num_threads, num_gpus);
         int gpu_id = cpu_thread_id % num_gpus;
 
         DRIVER_API_CALL(cuCtxPushCurrent(ctx_arr[cpu_thread_id]));
@@ -158,10 +158,16 @@ int main(int argc, char *argv[])
             PRINT(quiet, "%s\t\t%lld\n", tmpEventName, values[j]);
         }
         DRIVER_API_CALL(cuCtxPopCurrent(&(ctx_arr[gpu_id])));
+
+        errno = PAPI_cleanup_eventset(EventSet);
+        if (errno != PAPI_OK) {
+            fprintf(stderr, "PAPI_cleanup_eventset(%d) failed with error %d", EventSet, errno);
+            test_fail(__FILE__, __LINE__, "", errno);
+        }
+        PAPI_CALL(PAPI_destroy_eventset(&EventSet));
     }  // omp parallel region end
 
-    PRINT(quiet, "---------------------------\n");
-    for (i = 0; i < num_gpus; i++) {
+    for (i = 0; i < num_threads; i++) {
         DRIVER_API_CALL(cuCtxDestroy(ctx_arr[i]));
     }
 

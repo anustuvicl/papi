@@ -69,6 +69,9 @@ static void VectorAddSubtract(int N, int quiet)
     h_B = (int*)malloc(size);
     h_C = (int*)malloc(size);
     h_D = (int*)malloc(size);
+    if (h_A == NULL || h_B == NULL || h_C == NULL || h_D == NULL) {
+        fprintf(stderr, "Allocating input vectors failed.\n");
+    }
 
     // Initialize input vectors
     initVec(h_A, N);

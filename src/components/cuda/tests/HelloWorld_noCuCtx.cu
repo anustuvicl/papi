@@ -84,7 +84,13 @@ int main(int argc, char** argv)
 	}
 
 	long long *values = (long long *) calloc(eventCount, sizeof (long long));
+    if (values == NULL) {
+        test_fail(__FILE__, __LINE__, "Failed to allocate memory for values.\n", 0);
+    }
 	int *events = (int *) calloc(eventCount, sizeof (int));
+    if (events == NULL) {
+        test_fail(__FILE__, __LINE__, "Failed to allocate memory for events.\n", 0);
+    }
 	/* convert PAPI native events to PAPI code */
 	for( i = 0; i < eventCount; i++ ){
 		papi_errno = PAPI_event_name_to_code( argv[i+1], &events[i] );

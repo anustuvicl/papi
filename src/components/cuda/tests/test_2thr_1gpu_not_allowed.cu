@@ -86,6 +86,9 @@ void *thread_gpu(void * ptinfo)
     PRINT(quiet, "User measured values in thread id %d.\n", idx);
     PRINT(quiet, "%s\t\t%lld\n", g_evt_names[idx], values[0]);
     tinfo->retval = PAPI_OK;
+
+    PAPI_CALL(PAPI_cleanup_eventset(EventSet));
+    PAPI_CALL(PAPI_destroy_eventset(&EventSet));
     return NULL;
 }
 
@@ -145,6 +148,7 @@ int main(int argc, char **argv)
         DRIVER_API_CALL(cuCtxDestroy(data[i].cuCtx));
     }
 
+    PAPI_shutdown();
     // Check test pass/fail
     int retval = PAPI_OK;
     for (i=0; i<NUM_THREADS; i++) {

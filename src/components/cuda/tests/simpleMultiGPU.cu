@@ -267,6 +267,9 @@ int main( int argc, char **argv )
             if (papi_errno==PAPI_OK) {
                 PRINT( quiet, "Add event success: '%s' GPU %i\n", tmpEventName, i );
                 EventName[total_events] = (char *)calloc( 64, sizeof(char) );
+                if (EventName[total_events] == NULL) {
+                    test_fail(__FILE__, __LINE__, "Failed to allocate string.\n", 0);
+                }
                 snprintf( EventName[total_events], 64, "%s", tmpEventName );
                 total_events++;
             } else {

@@ -69,6 +69,7 @@ void *thread_gpu(void * idx)
         papi_errno = PAPI_add_named_event(EventSet, tmpEventName);
         if (papi_errno != PAPI_OK) {
             fprintf(stderr, "Failed to add event %s\n", tmpEventName);
+            test_skip(__FILE__, __LINE__, "", 0);
         }
     }
 
@@ -83,6 +84,8 @@ void *thread_gpu(void * idx)
         snprintf(tmpEventName, 64, "%s:device=%d", g_evt_names[i], gpuid);
         PRINT(quiet, "%s\t\t%lld\n", tmpEventName, values[i]);
     }
+    PAPI_CALL(PAPI_cleanup_eventset(EventSet));
+    PAPI_CALL(PAPI_destroy_eventset(&EventSet));
     return NULL;
 }
 
@@ -148,6 +151,7 @@ int main(int argc, char **argv)
     for (i = 0; i < numGPUs; i++) {
         DRIVER_API_CALL(cuCtxDestroy(cuCtx[i]));
     }
+    PAPI_shutdown();
     PRINT(quiet, "Main thread exit!\n");
     test_pass(__FILE__);
     return 0;

@@ -177,6 +177,7 @@ void profileKernels(perDeviceData &d,
     }
     PAPI_CALL(PAPI_stop(eventset, d.values));
     PAPI_CALL(PAPI_cleanup_eventset(eventset));
+    PAPI_CALL(PAPI_destroy_eventset(&eventset));
 }
 
 void print_measured_values(perDeviceData &d, vector<string> const &metricNames)

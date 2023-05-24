@@ -70,6 +70,11 @@ void multi_reset(int event_count, char **evt_names, long long *values)
         test_fail(__FILE__, __LINE__, "PAPI_cleanup_eventset error.", papi_errno);
     }
 
+    papi_errno = PAPI_destroy_eventset(&EventSet);
+    if (papi_errno != PAPI_OK) {
+        test_fail(__FILE__, __LINE__, "PAPI_destroy_eventset error.", papi_errno);
+    }
+
     papi_errno = cuCtxDestroy(ctx);
     if (papi_errno != CUDA_SUCCESS) {
         fprintf(stderr, "cude error: failed to destroy context.\n");
@@ -124,6 +129,10 @@ void multi_read(int event_count, char **evt_names, long long *values)
     if (papi_errno != PAPI_OK) {
         test_fail(__FILE__, __LINE__, "PAPI_cleanup_eventset error.", papi_errno);
     }
+    papi_errno = PAPI_destroy_eventset(&EventSet);
+    if (papi_errno != PAPI_OK) {
+        test_fail(__FILE__, __LINE__, "PAPI_destroy_eventset error.", papi_errno);
+    }
     papi_errno = cuCtxDestroy(ctx);
     if (papi_errno != CUDA_SUCCESS) {
         fprintf(stderr, "cude error: failed to destroy context.\n");
@@ -171,6 +180,10 @@ void single_read(int event_count, char **evt_names, long long *values)
     papi_errno = PAPI_cleanup_eventset(EventSet);
     if (papi_errno != PAPI_OK) {
         test_fail(__FILE__, __LINE__, "PAPI_cleanup_eventset error.", papi_errno);
+    }
+    papi_errno = PAPI_destroy_eventset(&EventSet);
+    if (papi_errno != PAPI_OK) {
+        test_fail(__FILE__, __LINE__, "PAPI_destroy_eventset error.", papi_errno);
     }
     papi_errno = cuCtxDestroy(ctx);
     if (papi_errno != CUDA_SUCCESS) {

@@ -93,9 +93,6 @@ int main(int argc, char *argv[])
         fprintf(stderr, "no CUDA capable devices were detected\n");
         test_skip(__FILE__, __LINE__, "", 0);
     }
-    if (num_gpus > MAX_THREADS)
-        num_gpus = MAX_THREADS;
-
     /////////////////////////////////////////////////////////////////
     // display CPU and GPU configuration
     //
@@ -111,6 +108,8 @@ int main(int argc, char *argv[])
         RUNTIME_API_CALL(cudaFree(NULL));
     }
 
+    int num_threads = (num_gpus > MAX_THREADS) ? MAX_THREADS : num_gpus;
+
     PRINT(quiet, "---------------------------\n");
     int papi_errno = PAPI_library_init( PAPI_VER_CURRENT );
     if( papi_errno != PAPI_VER_CURRENT ) {
@@ -120,7 +119,7 @@ int main(int argc, char *argv[])
     omp_lock_t lock;
     omp_init_lock(&lock);
 
-    omp_set_num_threads(num_gpus);  // create as many CPU threads as there are CUDA devices
+    omp_set_num_threads(num_threads);  // create as many CPU threads as there are CUDA devices
 #pragma omp parallel
     {
         int EventSet = PAPI_NULL;
@@ -154,9 +153,15 @@ int main(int argc, char *argv[])
             snprintf(tmpEventName, 64, "%s:device=%d", argv[j+1], gpu_id);
             PRINT(quiet, "%s\t\t%lld\n", tmpEventName, values[j]);
         }
+
+        errno = PAPI_cleanup_eventset(EventSet);
+        if (errno != PAPI_OK) {
+            fprintf(stderr, "PAPI_cleanup_eventset(%d) failed with error %d", EventSet, errno);
+            test_fail(__FILE__, __LINE__, "", errno);
+        }
+        PAPI_CALL(PAPI_destroy_eventset(&EventSet));
     }  // omp parallel region end
 
-    PRINT(quiet, "---------------------------\n");
 
     if (cudaSuccess != cudaGetLastError())
         fprintf(stderr, "%s\n", cudaGetErrorString(cudaGetLastError()));
