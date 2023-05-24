@@ -45,7 +45,7 @@ extern CUptiResult ( *cuptiGetVersionPtr ) (uint32_t* );
 #define DLSYM_AND_CHECK( dllib, name ) dlsym( dllib, name );  \
     if (dlerror() != NULL) {  \
         ERRDBG("A CUDA required function '%s' was not found in lib '%s'.\n", name, #dllib);  \
-        return PAPI_ENOSUPP;  \
+        return PAPI_ESYS;  \
     }
 
 #define CUDA_CALL( call, handleerror )  \

@@ -153,7 +153,7 @@ static int load_cupti_perf_sym(void)
 fn_exit:
     return papiErr;
 fn_fail:
-    papiErr = PAPI_ENOSUPP;
+    papiErr = PAPI_ESYS;
     goto fn_exit;
 }
 
@@ -259,7 +259,7 @@ fn_resume:
     LOGDBG("NVPW library loaded from %s\n", info.dli_fname);
     return PAPI_OK;
 fn_fail:
-    return PAPI_ENOSUPP;
+    return PAPI_ESYS;
 }
 
 static int unload_nvpw_sym(void)
@@ -306,7 +306,7 @@ static int initialize_cupti_profiler_api(void)
     if (cuptiProfilerInitializePtr(&profilerInitializeParams) == CUPTI_SUCCESS)
         return PAPI_OK;
     else
-        return PAPI_ESYS;  // or something else?
+        return PAPI_EMISC;
 }
 
 static int deinitialize_cupti_profiler_api(void)
@@ -316,7 +316,7 @@ static int deinitialize_cupti_profiler_api(void)
     if (cuptiProfilerDeInitializePtr(&profilerDeInitializeParams) == CUPTI_SUCCESS)
         return PAPI_OK;
     else
-        return PAPI_ESYS;
+        return PAPI_EMISC;
 }
 
 static int initialize_perfworks_api(void)
@@ -326,7 +326,7 @@ static int initialize_perfworks_api(void)
     if (NVPW_InitializeHostPtr(&perfInitHostParams) == NVPA_STATUS_SUCCESS)
         return PAPI_OK;
     else
-        return PAPI_ESYS;
+        return PAPI_EMISC;
     // NVPW_InitializeTarget_Params perfInitTargetParams = {NVPW_InitializeTarget_Params_STRUCT_SIZE };
     // NVPW_CALL(NVPW_InitializeTarget(&perfInitTargetParams));
     return PAPI_OK;
@@ -340,7 +340,7 @@ static int get_chip_name(int dev_num, char* chipName)
         .deviceIndex = 0
     };
     getChipName.deviceIndex = dev_num;
-    CUPTI_CALL( cuptiDeviceGetChipNamePtr(&getChipName), return PAPI_ENOSUPP );
+    CUPTI_CALL( cuptiDeviceGetChipNamePtr(&getChipName), return PAPI_EMISC );
     strcpy(chipName, getChipName.pChipName);
     return PAPI_OK;
 }
@@ -452,7 +452,7 @@ static int retrieve_metric_details(NVPA_MetricsContext *pMetricsContext, const c
         .pPriv = NULL,
         .pMetricsContext = pMetricsContext,
     };
-    NVPW_CALL(NVPW_MetricsContext_GetMetricProperties_EndPtr(&getMetricPropertiesEndParams), return PAPI_ENOSUPP);
+    NVPW_CALL(NVPW_MetricsContext_GetMetricProperties_EndPtr(&getMetricPropertiesEndParams), return PAPI_EMISC);
     return PAPI_OK;
 }
 
@@ -510,7 +510,7 @@ static int check_num_passes(struct NVPA_RawMetricsConfig *pRawMetricsConfig, int
         .pRawMetricsConfig = pRawMetricsConfig,
         .maxPassCount = 1,
     };
-    NVPW_CALL(NVPW_RawMetricsConfig_BeginPassGroupPtr(&beginPassGroupParams), return PAPI_ENOSUPP);
+    NVPW_CALL(NVPW_RawMetricsConfig_BeginPassGroupPtr(&beginPassGroupParams), return PAPI_EMISC);
 
     NVPW_RawMetricsConfig_AddMetrics_Params addMetricsParams = {
         .structSize = NVPW_RawMetricsConfig_AddMetrics_Params_STRUCT_SIZE,
@@ -519,21 +519,21 @@ static int check_num_passes(struct NVPA_RawMetricsConfig *pRawMetricsConfig, int
         .pRawMetricRequests = rmr,
         .numMetricRequests = rmr_count,
     };
-    NVPW_CALL(NVPW_RawMetricsConfig_AddMetricsPtr(&addMetricsParams), return PAPI_ENOSUPP);
+    NVPW_CALL(NVPW_RawMetricsConfig_AddMetricsPtr(&addMetricsParams), return PAPI_EMISC);
 
     NVPW_RawMetricsConfig_EndPassGroup_Params endPassGroupParams = {
         .structSize = NVPW_RawMetricsConfig_EndPassGroup_Params_STRUCT_SIZE,
         .pPriv = NULL,
         .pRawMetricsConfig = pRawMetricsConfig,
     };
-    NVPW_CALL(NVPW_RawMetricsConfig_EndPassGroupPtr(&endPassGroupParams), return PAPI_ENOSUPP);
+    NVPW_CALL(NVPW_RawMetricsConfig_EndPassGroupPtr(&endPassGroupParams), return PAPI_EMISC);
 
     NVPW_RawMetricsConfig_GetNumPasses_Params rawMetricsConfigGetNumPassesParams = {
         .structSize = NVPW_RawMetricsConfig_GetNumPasses_Params_STRUCT_SIZE,
         .pPriv = NULL,
         .pRawMetricsConfig = pRawMetricsConfig,
     };
-    NVPW_CALL( NVPW_RawMetricsConfig_GetNumPassesPtr(&rawMetricsConfigGetNumPassesParams), return PAPI_ENOSUPP );
+    NVPW_CALL( NVPW_RawMetricsConfig_GetNumPassesPtr(&rawMetricsConfigGetNumPassesParams), return PAPI_EMISC );
 
     int numNestingLevels = 1, numIsolatedPasses, numPipelinedPasses;
     numIsolatedPasses  = rawMetricsConfigGetNumPassesParams.numIsolatedPasses;
@@ -569,7 +569,7 @@ static int control_state_validate(cuptip_control_t *state)
             .pPriv = NULL,
             .pChipName = chip_name,
         };
-        NVPW_CALL( NVPW_CUDA_MetricsContext_CreatePtr(&metricsContextCreateParams), return PAPI_ENOSUPP);
+        NVPW_CALL( NVPW_CUDA_MetricsContext_CreatePtr(&metricsContextCreateParams), return PAPI_EMISC);
         if (metricsContextCreateParams.pMetricsContext == NULL) {
             ERRDBG("Failed to create metrics context!\n");
             errno = PAPI_ECMP;
@@ -583,7 +583,7 @@ static int control_state_validate(cuptip_control_t *state)
             .pPriv = NULL,
             .pMetricsContext = metricsContextCreateParams.pMetricsContext,
         };
-        NVPW_CALL(NVPW_MetricsContext_DestroyPtr(&metricsContextDestroyParams), return PAPI_ENOSUPP);
+        NVPW_CALL(NVPW_MetricsContext_DestroyPtr(&metricsContextDestroyParams), return PAPI_EMISC);
 
         if (errno != PAPI_OK) {
             goto fn_exit;
@@ -594,7 +594,7 @@ static int control_state_validate(cuptip_control_t *state)
             .activityKind = NVPA_ACTIVITY_KIND_PROFILER,
             .pChipName = chip_name,
         };
-        NVPW_CALL( NVPW_CUDA_RawMetricsConfig_CreatePtr(&nvpw_metricsConfigCreateParams), return PAPI_ENOSUPP );
+        NVPW_CALL( NVPW_CUDA_RawMetricsConfig_CreatePtr(&nvpw_metricsConfigCreateParams), return PAPI_EMISC );
 
         errno = check_num_passes(nvpw_metricsConfigCreateParams.pRawMetricsConfig,
                                state->ctl[gpu_id].rmr_count, state->ctl[gpu_id].rmr, &passes);
@@ -604,7 +604,7 @@ static int control_state_validate(cuptip_control_t *state)
             .pPriv = NULL,
             .pRawMetricsConfig = nvpw_metricsConfigCreateParams.pRawMetricsConfig,
         };
-        NVPW_CALL(NVPW_RawMetricsConfig_DestroyPtr((NVPW_RawMetricsConfig_Destroy_Params *) &rawMetricsConfigDestroyParams), return PAPI_ENOSUPP);
+        NVPW_CALL(NVPW_RawMetricsConfig_DestroyPtr((NVPW_RawMetricsConfig_Destroy_Params *) &rawMetricsConfigDestroyParams), return PAPI_EMISC);
         if (errno != PAPI_OK) {
             goto fn_exit;
         }
@@ -626,7 +626,7 @@ static int get_counter_availability(cuptip_gpu_control_t *ctl)
     errno = cuptiProfilerGetCounterAvailabilityPtr(&getCounterAvailabilityParams);
     if (errno != CUPTI_SUCCESS) {
         ERRDBG("CUPTI error %d: Failed to get size.\n", errno);
-        return PAPI_ENOSUPP;
+        return PAPI_EMISC;
     }
     // Allocate sized counterAvailabilityImage
     ctl->counterAvailabilityImage.size = getCounterAvailabilityParams.counterAvailabilityImageSize;
@@ -639,7 +639,7 @@ static int get_counter_availability(cuptip_gpu_control_t *ctl)
     errno = cuptiProfilerGetCounterAvailabilityPtr(&getCounterAvailabilityParams);
     if (errno != CUPTI_SUCCESS) {
         ERRDBG("CUPTI error %d: Failed to get bytes.\n", errno);
-        return PAPI_ENOSUPP;
+        return PAPI_EMISC;
     }
     return PAPI_OK;
 }
@@ -655,7 +655,7 @@ static int metric_get_config_image(const char *chipName, cuptip_gpu_control_t *c
         .activityKind = NVPA_ACTIVITY_KIND_PROFILER,
         .pChipName = chipName,
     };
-    NVPW_CALL( NVPW_CUDA_RawMetricsConfig_CreatePtr(&nvpw_metricsConfigCreateParams), return PAPI_ENOSUPP);
+    NVPW_CALL( NVPW_CUDA_RawMetricsConfig_CreatePtr(&nvpw_metricsConfigCreateParams), return PAPI_EMISC);
 
     if( ctl->counterAvailabilityImage.data != NULL)
     {
@@ -665,7 +665,7 @@ static int metric_get_config_image(const char *chipName, cuptip_gpu_control_t *c
             .pRawMetricsConfig = nvpw_metricsConfigCreateParams.pRawMetricsConfig,
             .pCounterAvailabilityImage = ctl->counterAvailabilityImage.data,
         };
-        NVPW_CALL(NVPW_RawMetricsConfig_SetCounterAvailabilityPtr(&setCounterAvailabilityParams), return PAPI_ENOSUPP);
+        NVPW_CALL(NVPW_RawMetricsConfig_SetCounterAvailabilityPtr(&setCounterAvailabilityParams), return PAPI_EMISC);
     };
 
     NVPW_RawMetricsConfig_BeginPassGroup_Params beginPassGroupParams = {
@@ -674,7 +674,7 @@ static int metric_get_config_image(const char *chipName, cuptip_gpu_control_t *c
         .pRawMetricsConfig = nvpw_metricsConfigCreateParams.pRawMetricsConfig,
         .maxPassCount = 1,
     };
-    NVPW_CALL(NVPW_RawMetricsConfig_BeginPassGroupPtr(&beginPassGroupParams), return PAPI_ENOSUPP);
+    NVPW_CALL(NVPW_RawMetricsConfig_BeginPassGroupPtr(&beginPassGroupParams), return PAPI_EMISC);
 
     NVPW_RawMetricsConfig_AddMetrics_Params addMetricsParams = {
         .structSize = NVPW_RawMetricsConfig_AddMetrics_Params_STRUCT_SIZE,
@@ -683,21 +683,21 @@ static int metric_get_config_image(const char *chipName, cuptip_gpu_control_t *c
         .pRawMetricRequests = ctl->rmr,
         .numMetricRequests = ctl->rmr_count,
     };
-    NVPW_CALL(NVPW_RawMetricsConfig_AddMetricsPtr(&addMetricsParams), return PAPI_ENOSUPP);
+    NVPW_CALL(NVPW_RawMetricsConfig_AddMetricsPtr(&addMetricsParams), return PAPI_EMISC);
 
     NVPW_RawMetricsConfig_EndPassGroup_Params endPassGroupParams = {
         .structSize = NVPW_RawMetricsConfig_EndPassGroup_Params_STRUCT_SIZE,
         .pPriv = NULL,
         .pRawMetricsConfig = nvpw_metricsConfigCreateParams.pRawMetricsConfig,
     };
-    NVPW_CALL(NVPW_RawMetricsConfig_EndPassGroupPtr(&endPassGroupParams), return PAPI_ENOSUPP);
+    NVPW_CALL(NVPW_RawMetricsConfig_EndPassGroupPtr(&endPassGroupParams), return PAPI_EMISC);
 
     NVPW_RawMetricsConfig_GenerateConfigImage_Params generateConfigImageParams = {
         .structSize = NVPW_RawMetricsConfig_GenerateConfigImage_Params_STRUCT_SIZE,
         .pPriv = NULL,
         .pRawMetricsConfig = nvpw_metricsConfigCreateParams.pRawMetricsConfig,
     };
-    NVPW_CALL(NVPW_RawMetricsConfig_GenerateConfigImagePtr(&generateConfigImageParams), return PAPI_ENOSUPP);
+    NVPW_CALL(NVPW_RawMetricsConfig_GenerateConfigImagePtr(&generateConfigImageParams), return PAPI_EMISC);
 
     NVPW_RawMetricsConfig_GetConfigImage_Params getConfigImageParams = {
         .structSize = NVPW_RawMetricsConfig_GetConfigImage_Params_STRUCT_SIZE,
@@ -706,7 +706,7 @@ static int metric_get_config_image(const char *chipName, cuptip_gpu_control_t *c
         .bytesAllocated = 0,
         .pBuffer = NULL,
     };
-    NVPW_CALL(NVPW_RawMetricsConfig_GetConfigImagePtr(&getConfigImageParams), return PAPI_ENOSUPP);
+    NVPW_CALL(NVPW_RawMetricsConfig_GetConfigImagePtr(&getConfigImageParams), return PAPI_EMISC);
 
     ctl->configImage.size = getConfigImageParams.bytesCopied;
     ctl->configImage.data = (uint8_t *) papi_calloc(ctl->configImage.size, sizeof(uint8_t));
@@ -717,14 +717,14 @@ static int metric_get_config_image(const char *chipName, cuptip_gpu_control_t *c
 
     getConfigImageParams.bytesAllocated = ctl->configImage.size;
     getConfigImageParams.pBuffer = ctl->configImage.data;
-    NVPW_CALL(NVPW_RawMetricsConfig_GetConfigImagePtr(&getConfigImageParams), return PAPI_ENOSUPP);
+    NVPW_CALL(NVPW_RawMetricsConfig_GetConfigImagePtr(&getConfigImageParams), return PAPI_EMISC);
 
     NVPW_RawMetricsConfig_Destroy_Params rawMetricsConfigDestroyParams = {
         .structSize = NVPW_RawMetricsConfig_Destroy_Params_STRUCT_SIZE,
         .pPriv = NULL,
         .pRawMetricsConfig = nvpw_metricsConfigCreateParams.pRawMetricsConfig,
     };
-    NVPW_CALL(NVPW_RawMetricsConfig_DestroyPtr((NVPW_RawMetricsConfig_Destroy_Params *) &rawMetricsConfigDestroyParams), return PAPI_ENOSUPP);
+    NVPW_CALL(NVPW_RawMetricsConfig_DestroyPtr((NVPW_RawMetricsConfig_Destroy_Params *) &rawMetricsConfigDestroyParams), return PAPI_EMISC);
 
     return PAPI_OK;
 }
@@ -737,7 +737,7 @@ static int metric_get_counter_data_prefix_image(const char* chipName, cuptip_gpu
         .pPriv = NULL,
         .pChipName = chipName,
     };
-    NVPW_CALL(NVPW_CounterDataBuilder_CreatePtr(&counterDataBuilderCreateParams), return PAPI_ENOSUPP);
+    NVPW_CALL(NVPW_CounterDataBuilder_CreatePtr(&counterDataBuilderCreateParams), return PAPI_EMISC);
 
     NVPW_CounterDataBuilder_AddMetrics_Params addMetricsParams = {
         .structSize = NVPW_CounterDataBuilder_AddMetrics_Params_STRUCT_SIZE,
@@ -746,7 +746,7 @@ static int metric_get_counter_data_prefix_image(const char* chipName, cuptip_gpu
         .pRawMetricRequests = ctl->rmr,
         .numMetricRequests = ctl->rmr_count,
     };
-    NVPW_CALL(NVPW_CounterDataBuilder_AddMetricsPtr(&addMetricsParams), return PAPI_ENOSUPP);
+    NVPW_CALL(NVPW_CounterDataBuilder_AddMetricsPtr(&addMetricsParams), return PAPI_EMISC);
 
     NVPW_CounterDataBuilder_GetCounterDataPrefix_Params getCounterDataPrefixParams = {
         .structSize = NVPW_CounterDataBuilder_GetCounterDataPrefix_Params_STRUCT_SIZE,
@@ -755,7 +755,7 @@ static int metric_get_counter_data_prefix_image(const char* chipName, cuptip_gpu
         .bytesAllocated = 0,
         .pBuffer = NULL,
     };
-    NVPW_CALL(NVPW_CounterDataBuilder_GetCounterDataPrefixPtr(&getCounterDataPrefixParams), return PAPI_ENOSUPP);
+    NVPW_CALL(NVPW_CounterDataBuilder_GetCounterDataPrefixPtr(&getCounterDataPrefixParams), return PAPI_EMISC);
 
     ctl->counterDataImagePrefix.size = getCounterDataPrefixParams.bytesCopied;
     ctl->counterDataImagePrefix.data = (uint8_t *) papi_calloc(ctl->counterDataImagePrefix.size, sizeof(uint8_t));
@@ -766,14 +766,14 @@ static int metric_get_counter_data_prefix_image(const char* chipName, cuptip_gpu
 
     getCounterDataPrefixParams.bytesAllocated = ctl->counterDataImagePrefix.size;
     getCounterDataPrefixParams.pBuffer = ctl->counterDataImagePrefix.data;
-    NVPW_CALL(NVPW_CounterDataBuilder_GetCounterDataPrefixPtr(&getCounterDataPrefixParams), return PAPI_ENOSUPP);
+    NVPW_CALL(NVPW_CounterDataBuilder_GetCounterDataPrefixPtr(&getCounterDataPrefixParams), return PAPI_EMISC);
 
     NVPW_CounterDataBuilder_Destroy_Params counterDataBuilderDestroyParams = {
         .structSize = NVPW_CounterDataBuilder_Destroy_Params_STRUCT_SIZE,
         .pPriv = NULL,
         .pCounterDataBuilder = counterDataBuilderCreateParams.pCounterDataBuilder,
     };
-    NVPW_CALL(NVPW_CounterDataBuilder_DestroyPtr(&counterDataBuilderDestroyParams), return PAPI_ENOSUPP);
+    NVPW_CALL(NVPW_CounterDataBuilder_DestroyPtr(&counterDataBuilderDestroyParams), return PAPI_EMISC);
 
     return PAPI_OK;
 }
@@ -798,7 +798,7 @@ static int create_counter_data_image(cuptip_gpu_control_t *ctl)
         .sizeofCounterDataImageOptions = CUpti_Profiler_CounterDataImageOptions_STRUCT_SIZE,
         .pOptions = &counterDataImageOptions,
     };
-    CUPTI_CALL(cuptiProfilerCounterDataImageCalculateSizePtr(&calculateSizeParams), return PAPI_ENOSUPP);
+    CUPTI_CALL(cuptiProfilerCounterDataImageCalculateSizePtr(&calculateSizeParams), return PAPI_EMISC);
 
     CUpti_Profiler_CounterDataImage_Initialize_Params initializeParams = {
         .structSize = CUpti_Profiler_CounterDataImage_Initialize_Params_STRUCT_SIZE,
@@ -816,7 +816,7 @@ static int create_counter_data_image(cuptip_gpu_control_t *ctl)
     }
 
     initializeParams.pCounterDataImage = ctl->counterDataImage.data;
-    CUPTI_CALL(cuptiProfilerCounterDataImageInitializePtr(&initializeParams), return PAPI_ENOSUPP);
+    CUPTI_CALL(cuptiProfilerCounterDataImageInitializePtr(&initializeParams), return PAPI_EMISC);
 
     CUpti_Profiler_CounterDataImage_CalculateScratchBufferSize_Params scratchBufferSizeParams = {
         .structSize = CUpti_Profiler_CounterDataImage_CalculateScratchBufferSize_Params_STRUCT_SIZE,
@@ -824,7 +824,7 @@ static int create_counter_data_image(cuptip_gpu_control_t *ctl)
         .counterDataImageSize = calculateSizeParams.counterDataImageSize,
         .pCounterDataImage = initializeParams.pCounterDataImage,
     };
-    CUPTI_CALL(cuptiProfilerCounterDataImageCalculateScratchBufferSizePtr(&scratchBufferSizeParams), return PAPI_ENOSUPP);
+    CUPTI_CALL(cuptiProfilerCounterDataImageCalculateScratchBufferSizePtr(&scratchBufferSizeParams), return PAPI_EMISC);
 
     ctl->counterDataScratchBuffer.size = scratchBufferSizeParams.counterDataScratchBufferSize;
     ctl->counterDataScratchBuffer.data = (uint8_t *) papi_calloc(ctl->counterDataScratchBuffer.size, sizeof(uint8_t));
@@ -841,7 +841,7 @@ static int create_counter_data_image(cuptip_gpu_control_t *ctl)
         .counterDataScratchBufferSize = ctl->counterDataScratchBuffer.size,
         .pCounterDataScratchBuffer = ctl->counterDataScratchBuffer.data,
     };
-    CUPTI_CALL(cuptiProfilerCounterDataImageInitializeScratchBufferPtr(&initScratchBufferParams), return PAPI_ENOSUPP);
+    CUPTI_CALL(cuptiProfilerCounterDataImageInitializeScratchBufferPtr(&initScratchBufferParams), return PAPI_EMISC);
 
     return PAPI_OK;
 }
@@ -877,7 +877,7 @@ static int begin_profiling(cuptip_gpu_control_t *ctl)
         .maxRangesPerPass = 1,
         .maxLaunchesPerPass = 1,
     };
-    CUPTI_CALL(cuptiProfilerBeginSessionPtr(&beginSessionParams), return PAPI_ENOSUPP);
+    CUPTI_CALL(cuptiProfilerBeginSessionPtr(&beginSessionParams), return PAPI_EMISC);
 
     CUpti_Profiler_SetConfig_Params setConfigParams = {
         .structSize = CUpti_Profiler_SetConfig_Params_STRUCT_SIZE,
@@ -890,7 +890,7 @@ static int begin_profiling(cuptip_gpu_control_t *ctl)
         .passIndex = 0,
         .targetNestingLevel = 1,
     };
-    CUPTI_CALL(cuptiProfilerSetConfigPtr(&setConfigParams), return PAPI_ENOSUPP);
+    CUPTI_CALL(cuptiProfilerSetConfigPtr(&setConfigParams), return PAPI_EMISC);
 
     /* User takes the resposiblity of replaying the kernel launches */
     CUpti_Profiler_BeginPass_Params beginPassParams = {
@@ -898,14 +898,14 @@ static int begin_profiling(cuptip_gpu_control_t *ctl)
         .pPriv = NULL,
         .ctx = NULL,
     };
-    CUPTI_CALL(cuptiProfilerBeginPassPtr(&beginPassParams), return PAPI_ENOSUPP);
+    CUPTI_CALL(cuptiProfilerBeginPassPtr(&beginPassParams), return PAPI_EMISC);
 
     CUpti_Profiler_EnableProfiling_Params enableProfilingParams = {
         .structSize = CUpti_Profiler_EnableProfiling_Params_STRUCT_SIZE,
         .pPriv = NULL,
         .ctx = NULL,
     };
-    CUPTI_CALL(cuptiProfilerEnableProfilingPtr(&enableProfilingParams), return PAPI_ENOSUPP);
+    CUPTI_CALL(cuptiProfilerEnableProfilingPtr(&enableProfilingParams), return PAPI_EMISC);
 
     char rangeName[64];
     sprintf(rangeName, "PAPI_Range_%d", ctl->gpu_id);
@@ -916,7 +916,7 @@ static int begin_profiling(cuptip_gpu_control_t *ctl)
         .pRangeName = (const char*) &rangeName,
         .rangeNameLength = 100,
     };
-    CUPTI_CALL(cuptiProfilerPushRangePtr(&pushRangeParams), return PAPI_ENOSUPP);
+    CUPTI_CALL(cuptiProfilerPushRangePtr(&pushRangeParams), return PAPI_EMISC);
 
     return PAPI_OK;
 }
@@ -932,42 +932,42 @@ static int end_profiling(cuptip_gpu_control_t *ctl)
         .pPriv = NULL,
         .ctx = NULL,
     };
-    CUPTI_CALL(cuptiProfilerDisableProfilingPtr(&disableProfilingParams), return PAPI_ENOSUPP );
+    CUPTI_CALL(cuptiProfilerDisableProfilingPtr(&disableProfilingParams), return PAPI_EMISC );
 
     CUpti_Profiler_PopRange_Params popRangeParams = {
         .structSize = CUpti_Profiler_PopRange_Params_STRUCT_SIZE,
         .pPriv = NULL,
         .ctx = NULL,
     };
-    CUPTI_CALL(cuptiProfilerPopRangePtr(&popRangeParams), return PAPI_ENOSUPP );
+    CUPTI_CALL(cuptiProfilerPopRangePtr(&popRangeParams), return PAPI_EMISC );
 
     CUpti_Profiler_EndPass_Params endPassParams = {
         .structSize = CUpti_Profiler_EndPass_Params_STRUCT_SIZE,
         .pPriv = NULL,
         .ctx = NULL,
     };
-    CUPTI_CALL(cuptiProfilerEndPassPtr(&endPassParams), return PAPI_ENOSUPP );
+    CUPTI_CALL(cuptiProfilerEndPassPtr(&endPassParams), return PAPI_EMISC );
 
     CUpti_Profiler_FlushCounterData_Params flushCounterDataParams = {
         .structSize = CUpti_Profiler_FlushCounterData_Params_STRUCT_SIZE,
         .pPriv = NULL,
         .ctx = NULL,
     };
-    CUPTI_CALL(cuptiProfilerFlushCounterDataPtr(&flushCounterDataParams), return PAPI_ENOSUPP );
+    CUPTI_CALL(cuptiProfilerFlushCounterDataPtr(&flushCounterDataParams), return PAPI_EMISC );
 
     CUpti_Profiler_UnsetConfig_Params unsetConfigParams = {
         .structSize = CUpti_Profiler_UnsetConfig_Params_STRUCT_SIZE,
         .pPriv = NULL,
         .ctx = NULL,
     };
-    CUPTI_CALL(cuptiProfilerUnsetConfigPtr(&unsetConfigParams), return PAPI_ENOSUPP );
+    CUPTI_CALL(cuptiProfilerUnsetConfigPtr(&unsetConfigParams), return PAPI_EMISC );
 
     CUpti_Profiler_EndSession_Params endSessionParams = {
         .structSize = CUpti_Profiler_EndSession_Params_STRUCT_SIZE,
         .pPriv = NULL,
         .ctx = NULL,
     };
-    CUPTI_CALL(cuptiProfilerEndSessionPtr(&endSessionParams), return PAPI_ENOSUPP );
+    CUPTI_CALL(cuptiProfilerEndSessionPtr(&endSessionParams), return PAPI_EMISC );
 
     return PAPI_OK;
 }
@@ -1012,7 +1012,7 @@ static int eval_metric_values_per_gpu(NVPA_MetricsContext* pMetricsContext, cupt
         .rangeIndex = 0,
         .isolated = 1,
     };
-    NVPW_CALL(NVPW_MetricsContext_SetCounterDataPtr(&setCounterDataParams), return PAPI_ENOSUPP);
+    NVPW_CALL(NVPW_MetricsContext_SetCounterDataPtr(&setCounterDataParams), return PAPI_EMISC);
     NVPW_MetricsContext_EvaluateToGpuValues_Params evalToGpuParams = {
         .structSize = NVPW_MetricsContext_EvaluateToGpuValues_Params_STRUCT_SIZE,
         .pPriv = NULL,
@@ -1021,7 +1021,7 @@ static int eval_metric_values_per_gpu(NVPA_MetricsContext* pMetricsContext, cupt
         .ppMetricNames = (const char* const*) metricNames,
         .pMetricValues = gpuValues,
     };
-    NVPW_CALL(NVPW_MetricsContext_EvaluateToGpuValuesPtr(&evalToGpuParams), return PAPI_ENOSUPP);
+    NVPW_CALL(NVPW_MetricsContext_EvaluateToGpuValuesPtr(&evalToGpuParams), return PAPI_EMISC);
     papi_free(metricNames);
     // char rangeName[100];
     for (i=0; i < (int) ctl->event_names->count; i++) {
@@ -1053,7 +1053,7 @@ static int get_metric_values(cuptip_control_t *state)
             .pPriv = NULL,
             .pChipName = chip_name,
         };
-        NVPW_CALL( NVPW_CUDA_MetricsContext_CreatePtr(&metricsContextCreateParams), return PAPI_ENOSUPP);
+        NVPW_CALL( NVPW_CUDA_MetricsContext_CreatePtr(&metricsContextCreateParams), return PAPI_EMISC);
         if (metricsContextCreateParams.pMetricsContext == NULL) {
             ERRDBG("Failed to create metrics context!\n");
             errno = PAPI_ECMP;
@@ -1071,7 +1071,7 @@ static int get_metric_values(cuptip_control_t *state)
             .pPriv = NULL,
             .pMetricsContext = metricsContextCreateParams.pMetricsContext,
         };
-        NVPW_CALL(NVPW_MetricsContext_DestroyPtr(&metricsContextDestroyParams), return PAPI_ENOSUPP);
+        NVPW_CALL(NVPW_MetricsContext_DestroyPtr(&metricsContextDestroyParams), return PAPI_EMISC);
 
     }
 fn_exit:
@@ -1135,7 +1135,7 @@ int cuptip_enumerate_all_metric_names(event_list_t *all_evt_names)
             .pChipName = avail_events[gpu_id].chip_name,
         };
         NVPW_CALL(NVPW_CUDA_MetricsContext_CreatePtr(&(avail_events[gpu_id].metricsContextCreateParams)),
-            return PAPI_ENOSUPP);
+            return PAPI_EMISC);
 
         NVPW_MetricsContext_GetMetricNames_Begin_Params getMetricNameBeginParams = {
             .structSize = NVPW_MetricsContext_GetMetricNames_Begin_Params_STRUCT_SIZE,
@@ -1145,7 +1145,7 @@ int cuptip_enumerate_all_metric_names(event_list_t *all_evt_names)
             .hidePerCycleSubMetrics = !listsubmetrics,
             .hidePctOfPeakSubMetrics = !listsubmetrics,
         };
-        NVPW_CALL(NVPW_MetricsContext_GetMetricNames_BeginPtr(&getMetricNameBeginParams), return PAPI_ENOSUPP);
+        NVPW_CALL(NVPW_MetricsContext_GetMetricNames_BeginPtr(&getMetricNameBeginParams), return PAPI_EMISC);
 
         avail_events[gpu_id].num_metrics = getMetricNameBeginParams.numMetrics;
         avail_events[gpu_id].nv_metrics = initialize_dynamic_event_list_size(avail_events[gpu_id].num_metrics);
@@ -1166,7 +1166,7 @@ int cuptip_enumerate_all_metric_names(event_list_t *all_evt_names)
             .pPriv = NULL,
             .pMetricsContext = avail_events[gpu_id].metricsContextCreateParams.pMetricsContext,
         };
-        NVPW_CALL(NVPW_MetricsContext_GetMetricNames_EndPtr((NVPW_MetricsContext_GetMetricNames_End_Params *) &getMetricNameEndParams), return PAPI_ENOSUPP);
+        NVPW_CALL(NVPW_MetricsContext_GetMetricNames_EndPtr((NVPW_MetricsContext_GetMetricNames_End_Params *) &getMetricNameEndParams), return PAPI_EMISC);
 
     }
     TOCK;
@@ -1225,7 +1225,7 @@ int cuptip_get_event_description(const char *evt_name, char *description)
                 .activityKind = NVPA_ACTIVITY_KIND_PROFILER,
                 .pChipName = avail_events[gpu_id].chip_name,
             };
-            NVPW_CALL( NVPW_CUDA_RawMetricsConfig_CreatePtr(&nvpw_metricsConfigCreateParams), return PAPI_ENOSUPP );
+            NVPW_CALL( NVPW_CUDA_RawMetricsConfig_CreatePtr(&nvpw_metricsConfigCreateParams), return PAPI_EMISC );
 
             errno = check_num_passes(nvpw_metricsConfigCreateParams.pRawMetricsConfig,
                                    numdep, temp, &passes);
@@ -1235,7 +1235,7 @@ int cuptip_get_event_description(const char *evt_name, char *description)
                 .pPriv = NULL,
                 .pRawMetricsConfig = nvpw_metricsConfigCreateParams.pRawMetricsConfig,
             };
-            NVPW_CALL(NVPW_RawMetricsConfig_DestroyPtr((NVPW_RawMetricsConfig_Destroy_Params *) &rawMetricsConfigDestroyParams), return PAPI_ENOSUPP);
+            NVPW_CALL(NVPW_RawMetricsConfig_DestroyPtr((NVPW_RawMetricsConfig_Destroy_Params *) &rawMetricsConfigDestroyParams), return PAPI_EMISC);
 
             snprintf(desc + strlen(desc), PAPI_2MAX_STR_LEN - strlen(desc), " Numpass=%d", passes);
             if (passes > 1)
@@ -1337,20 +1337,20 @@ int cuptip_control_create(event_list_t *all_event_names, int event_count, int *e
     CUcontext tempCtx;
     errno = cudaGetDevicePtr(&gpu_id);
     if (errno != cudaSuccess) {
-        return PAPI_ENOSUPP;
+        return PAPI_EMISC;
     }
     errno = cuCtxGetCurrentPtr(&tempCtx);
     if (errno != CUDA_SUCCESS) {
-        return PAPI_ENOSUPP;
+        return PAPI_EMISC;
     }
     if (cu_ctx[gpu_id] == NULL) {
         if (tempCtx != NULL) {
             LOGDBG("Registering device = %d with ctx = %p.\n", gpu_id, tempCtx);
-            CUDA_CALL(cuCtxGetCurrentPtr(&cu_ctx[gpu_id]), return PAPI_ENOSUPP);
+            CUDA_CALL(cuCtxGetCurrentPtr(&cu_ctx[gpu_id]), return PAPI_EMISC);
         }
         else {
-            CUDART_CALL(cudaFreePtr(NULL), return PAPI_ENOSUPP);
-            CUDA_CALL(cuCtxGetCurrentPtr(&cu_ctx[gpu_id]), return PAPI_ENOSUPP);
+            CUDART_CALL(cudaFreePtr(NULL), return PAPI_EMISC);
+            CUDA_CALL(cuCtxGetCurrentPtr(&cu_ctx[gpu_id]), return PAPI_EMISC);
             LOGDBG("Using primary device context %p for device %d.\n", cu_ctx[gpu_id], gpu_id);
         }
     }
@@ -1396,10 +1396,10 @@ int cuptip_start(void **pctl, void **pcu_ctx)
     cuptip_gpu_control_t *ctl;
     CUcontext * cu_ctx = (CUcontext *) (*pcu_ctx);
     CUcontext userCtx;
-    CUDA_CALL(cuCtxGetCurrentPtr(&userCtx), return PAPI_ENOSUPP);
+    CUDA_CALL(cuCtxGetCurrentPtr(&userCtx), return PAPI_EMISC);
     if (userCtx == NULL) {
-        CUDART_CALL(cudaFreePtr(NULL), return PAPI_ENOSUPP);
-        CUDA_CALL(cuCtxGetCurrentPtr(&userCtx), return PAPI_ENOSUPP);
+        CUDART_CALL(cudaFreePtr(NULL), return PAPI_EMISC);
+        CUDA_CALL(cuCtxGetCurrentPtr(&userCtx), return PAPI_EMISC);
     }
     int gpu_id;
     char chip_name[32];
@@ -1419,7 +1419,7 @@ int cuptip_start(void **pctl, void **pcu_ctx)
             ERRDBG("Failed to get chipname.\n");
             goto fn_fail;
         }
-        CUDA_CALL(cuCtxSetCurrentPtr(cu_ctx[gpu_id]), return PAPI_ENOSUPP);
+        CUDA_CALL(cuCtxSetCurrentPtr(cu_ctx[gpu_id]), return PAPI_EMISC);
         errno = get_counter_availability(ctl);
         if (errno != PAPI_OK) {
             ERRDBG("Error getting counter availability image.\n");
@@ -1443,7 +1443,7 @@ int cuptip_start(void **pctl, void **pcu_ctx)
     }
     state->running = True;
 fn_exit:
-    CUDA_CALL(cuCtxSetCurrentPtr(userCtx), return PAPI_ENOSUPP);
+    CUDA_CALL(cuCtxSetCurrentPtr(userCtx), return PAPI_EMISC);
     return errno;
 fn_fail:
     errno = PAPI_ECMP;
@@ -1457,10 +1457,10 @@ int cuptip_stop(void **pctl, void **pcu_ctx)
     cuptip_gpu_control_t *ctl;
     CUcontext * cu_ctx = (CUcontext *) (*pcu_ctx);
     CUcontext userCtx;
-    CUDA_CALL(cuCtxGetCurrentPtr(&userCtx), return PAPI_ENOSUPP);
+    CUDA_CALL(cuCtxGetCurrentPtr(&userCtx), return PAPI_EMISC);
     if (userCtx == NULL) {
-        CUDART_CALL(cudaFreePtr(NULL), return PAPI_ENOSUPP);
-        CUDA_CALL(cuCtxGetCurrentPtr(&userCtx), return PAPI_ENOSUPP);
+        CUDART_CALL(cudaFreePtr(NULL), return PAPI_EMISC);
+        CUDA_CALL(cuCtxGetCurrentPtr(&userCtx), return PAPI_EMISC);
     }
     int gpu_id;
     int errno = PAPI_OK;
@@ -1472,7 +1472,7 @@ int cuptip_stop(void **pctl, void **pcu_ctx)
         ctl = &(state->ctl[gpu_id]);
         if (ctl->event_names->count == 0)
             continue;
-        CUDA_CALL(cuCtxSetCurrentPtr(cu_ctx[gpu_id]), return PAPI_ENOSUPP);
+        CUDA_CALL(cuCtxSetCurrentPtr(cu_ctx[gpu_id]), return PAPI_EMISC);
         errno = end_profiling(ctl);
         if (errno != PAPI_OK) {
             ERRDBG("Failed to stop profiling on gpu %d\n", gpu_id);
@@ -1484,7 +1484,7 @@ int cuptip_stop(void **pctl, void **pcu_ctx)
     }
     state->running = False;
 fn_exit:
-    CUDA_CALL(cuCtxSetCurrentPtr(userCtx), return PAPI_ENOSUPP);
+    CUDA_CALL(cuCtxSetCurrentPtr(userCtx), return PAPI_EMISC);
     return errno;
 fn_fail:
     errno = PAPI_ECMP;

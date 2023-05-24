@@ -283,7 +283,6 @@ static int cuda_set_domain(hwd_control_state_t __attribute__((unused)) *ctrl, in
         return (PAPI_OK);
     else
         return (PAPI_EINVAL);
-    return (PAPI_OK);
 }
 
 static int cuda_update_control_state(hwd_control_state_t *ctl,
@@ -297,6 +296,7 @@ static int cuda_update_control_state(hwd_control_state_t *ctl,
         return papi_errno;
     if (ntv_count == 0)
         return PAPI_OK;
+
     cuda_ctl_t *control = (cuda_ctl_t *) ctl;
     LOCKDBG("Locking.\n");
     _papi_hwi_lock(_cuda_lock);

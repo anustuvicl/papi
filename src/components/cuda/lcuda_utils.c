@@ -68,7 +68,7 @@ static int load_cuda_sym(void)
     LOGDBG("CUDA driver library loaded from %s\n", info.dli_fname);
     return PAPI_OK;
 fn_fail:
-    return PAPI_ENOSUPP;
+    return PAPI_ESYS;
 }
 
 static int unload_cuda_sym(void)
@@ -143,7 +143,7 @@ fn_resume:
     LOGDBG("CUDA runtime library loaded from %s\n", info.dli_fname);
     return PAPI_OK;
 fn_fail:
-    return PAPI_ENOSUPP;
+    return PAPI_ESYS;
 }
 
 static int unload_cudart_sym(void)
@@ -208,7 +208,7 @@ fn_resume:
     LOGDBG("CUPTI library loaded from %s\n", info.dli_fname);
     return PAPI_OK;
 fn_fail:
-    return PAPI_ENOSUPP;
+    return PAPI_ESYS;
 }
 
 static int unload_cupti_common_sym(void)
@@ -246,14 +246,14 @@ int util_unload_cuda_sym(void)
 static int util_dylib_cu_runtime_version(void)
 {
     int runtimeVersion;
-    CUDART_CALL(cudaRuntimeGetVersionPtr(&runtimeVersion), return PAPI_ENOSUPP );
+    CUDART_CALL(cudaRuntimeGetVersionPtr(&runtimeVersion), return PAPI_EMISC );
     return runtimeVersion;
 }
 
 static int util_dylib_cupti_version(void)
 {
     unsigned int cuptiVersion;
-    CUPTI_CALL(cuptiGetVersionPtr(&cuptiVersion), return PAPI_ENOSUPP );
+    CUPTI_CALL(cuptiGetVersionPtr(&cuptiVersion), return PAPI_EMISC );
     return cuptiVersion;
 }
 
@@ -262,7 +262,7 @@ int get_device_count(void)
     static int numDevs = -1;
     if (numDevs != -1)
         goto fn_exit;
-    CUDART_CALL(cudaGetDeviceCountPtr(&numDevs), return PAPI_ENOSUPP);
+    CUDART_CALL(cudaGetDeviceCountPtr(&numDevs), return PAPI_EMISC);
 fn_exit:
     return numDevs;
 }
@@ -273,10 +273,10 @@ static int get_gpu_compute_capability(int dev_num)
     int cc;
     CUDART_CALL(cudaDeviceGetAttributePtr(&cc_major,
         cudaDevAttrComputeCapabilityMajor, dev_num),
-            return PAPI_ENOSUPP );
+            return PAPI_EMISC );
     CUDART_CALL(cudaDeviceGetAttributePtr(&cc_minor,
         cudaDevAttrComputeCapabilityMinor, dev_num),
-            return PAPI_ENOSUPP );
+            return PAPI_EMISC );
     cc = cc_major * 10 + cc_minor;
     return cc;
 }
