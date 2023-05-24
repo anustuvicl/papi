@@ -191,9 +191,20 @@ static int load_nvpw_sym(void)
     COMPDBG("Entering.\n");
     char dlname[] = "libnvperf_host.so";
     char *found_files[MAX_FILES];
+    char lookup_path[PATH_MAX];
     int count, i, found = 0;
     char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
     if (papi_cuda_root) {
+        sprintf(lookup_path, "%s/extras/CUPTI/lib64/%s", papi_cuda_root, dlname);
+        dl_nvpw = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
+        if (dl_nvpw) {
+            goto fn_resume;
+        }
+        sprintf(lookup_path, "%s/lib64/%s", papi_cuda_root, dlname);
+        dl_nvpw = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
+        if (dl_nvpw) {
+            goto fn_resume;
+        }
         count = search_files_in_path(dlname, papi_cuda_root, found_files);
         for (i = 0; i < count; i++) {
             dl_nvpw = dlopen(found_files[i], RTLD_NOW | RTLD_GLOBAL);
@@ -203,7 +214,7 @@ static int load_nvpw_sym(void)
             }
         }
         for (i = 0; i < count; i++) {
-            free(found_files[i]);
+            papi_free(found_files[i]);
         }
     }
     if (!found) {
@@ -213,7 +224,7 @@ static int load_nvpw_sym(void)
             goto fn_fail;
         }
     }
-
+fn_resume:
     NVPW_GetSupportedChipNamesPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_GetSupportedChipNames");
     NVPW_CUDA_MetricsContext_CreatePtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_CUDA_MetricsContext_Create");
     NVPW_MetricsContext_DestroyPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_MetricsContext_Destroy");
@@ -341,7 +352,7 @@ struct byte_array_s {
 
 struct cuptip_gpu_control_s {
     int gpu_id;
-    event_list_t event_names;
+    event_list_t *event_names;
     int rmr_count;
     NVPA_RawMetricRequest *rmr;
     byte_array_t counterDataImagePrefix;
@@ -363,7 +374,11 @@ static int add_events_per_gpu(event_list_t *event_names, int event_count, int *e
     int i, gpu_id, errno = PAPI_OK;
     char nvName[PAPI_MAX_STR_LEN];
     for (i=0; i < num_gpus; i++) {
-        errno = initialize_dynamic_event_list( &(state->ctl[i].event_names) );
+        state->ctl[i].event_names = initialize_dynamic_event_list();
+        if (state->ctl[i].event_names == NULL) {
+            errno = PAPI_ENOMEM;
+            goto fn_exit;
+        }
     }
     for (i = 0; i < event_count; i++) {
         errno = tokenize_event_name(event_names->evts[evt_ids[i]].name, (char*) &nvName, &gpu_id);
@@ -373,13 +388,13 @@ static int add_events_per_gpu(event_list_t *event_names, int event_count, int *e
             errno = PAPI_EINVAL;
             goto fn_exit;
         }
-        insert_event_record(&(state->ctl[gpu_id].event_names),
+        insert_event_record(state->ctl[gpu_id].event_names,
                             event_names->evts[evt_ids[i]].name,
                             event_names->evts[evt_ids[i]].evt_code,
                             i);
-        LOGDBG("Adding event gpu %d name %s with code %d at pos %d\n", gpu_id, event_names->evts[evt_ids[i]].name,
-                                                                       event_names->evts[evt_ids[i]].evt_code, i);
-
+        LOGDBG("Adding event gpu %d name %s with code %d at pos %d\n",
+            gpu_id, event_names->evts[evt_ids[i]].name,
+            event_names->evts[evt_ids[i]].evt_code, i);
     }
 fn_exit:
     return errno;
@@ -390,8 +405,11 @@ static int retrieve_metric_details(NVPA_MetricsContext *pMetricsContext, const c
 {
     COMPDBG("Entering.\n");
     int num_dep, i, len;
-    NVPA_RawMetricRequest *rmr;
     NVPA_Status nvpa_err;
+
+    if (nv_name == NULL || description == NULL) {
+        return PAPI_EINVAL;
+    }
 
     NVPW_MetricsContext_GetMetricProperties_Begin_Params getMetricPropertiesBeginParams = {
         .structSize = NVPW_MetricsContext_GetMetricProperties_Begin_Params_STRUCT_SIZE,
@@ -408,7 +426,7 @@ static int retrieve_metric_details(NVPA_MetricsContext *pMetricsContext, const c
 
     for (num_dep=0; getMetricPropertiesBeginParams.ppRawMetricDependencies[num_dep] != NULL; num_dep++){;}
 
-    rmr = (NVPA_RawMetricRequest *) papi_calloc(num_dep, sizeof(NVPA_RawMetricRequest));
+    NVPA_RawMetricRequest *rmr = (NVPA_RawMetricRequest *) papi_calloc(num_dep, sizeof(NVPA_RawMetricRequest));
     if (rmr == NULL) {
         return PAPI_ENOMEM;
     }
@@ -447,12 +465,13 @@ static int get_event_names_rmr(NVPA_MetricsContext* pMetricsContext, cuptip_gpu_
     unsigned int i;
     int j, k, num_dep;
     NVPA_RawMetricRequest *temp;
-    char nv_name[PAPI_MAX_STR_LEN]; int gpuid;
+    char nv_name[PAPI_MAX_STR_LEN];
+    int gpuid;
 
-    for (i=0; i < ctl->event_names.count; i++) {
-        errno = tokenize_event_name(ctl->event_names.evts[i].name, (char *) &nv_name, &gpuid);
+    for (i=0; i < ctl->event_names->count; i++) {
+        errno = tokenize_event_name(ctl->event_names->evts[i].name, (char *) &nv_name, &gpuid);
 
-        errno = retrieve_metric_details(pMetricsContext, nv_name, ctl->event_names.evts[i].desc, &num_dep, &temp);
+        errno = retrieve_metric_details(pMetricsContext, nv_name, ctl->event_names->evts[i].desc, &num_dep, &temp);
         if (errno != PAPI_OK) {
             errno = PAPI_ENOEVNT;
             goto fn_exit;
@@ -537,7 +556,7 @@ static int control_state_validate(cuptip_control_t *state)
     char chip_name[32];
 
     for (gpu_id=0; gpu_id < num_gpus; gpu_id++) {
-        if (state->ctl[gpu_id].event_names.count == 0)
+        if (state->ctl[gpu_id].event_names->count == 0)
             continue;
         errno = get_chip_name(gpu_id, chip_name);
         if (errno != PAPI_OK) {
@@ -612,7 +631,9 @@ static int get_counter_availability(cuptip_gpu_control_t *ctl)
     // Allocate sized counterAvailabilityImage
     ctl->counterAvailabilityImage.size = getCounterAvailabilityParams.counterAvailabilityImageSize;
     ctl->counterAvailabilityImage.data = (uint8_t *) papi_malloc(ctl->counterAvailabilityImage.size);
-
+    if (ctl->counterAvailabilityImage.data == NULL) {
+        return PAPI_ENOMEM;
+    }
     // Initialize counterAvailabilityImage
     getCounterAvailabilityParams.pCounterAvailabilityImage = ctl->counterAvailabilityImage.data;
     errno = cuptiProfilerGetCounterAvailabilityPtr(&getCounterAvailabilityParams);
@@ -960,27 +981,28 @@ static int eval_metric_values_per_gpu(NVPA_MetricsContext* pMetricsContext, cupt
         return PAPI_EINVAL;
     }
     int i, errno=PAPI_OK;
-    int numMetrics = ctl->event_names.count;
+    int numMetrics = ctl->event_names->count;
 
     // Create array of added metric names for this gpu
-    char **metricNames;
     int dummy;
-    metricNames = (char**) papi_calloc(numMetrics, sizeof(char *));
+    char **metricNames = (char**) papi_calloc(numMetrics, sizeof(char *));
     if (metricNames == NULL) {
         ERRDBG("calloc metricNames failed.\n");
         return PAPI_ENOMEM;
     }
     for (i=0; i<numMetrics; i++) {
-        errno = tokenize_event_name(ctl->event_names.evts[i].name, ctl->event_names.evts[i].desc, &dummy);
+        errno = tokenize_event_name(ctl->event_names->evts[i].name, ctl->event_names->evts[i].desc, &dummy);
         if (errno != PAPI_OK)
             goto fn_exit;
-        metricNames[i] = (char *) &(ctl->event_names.evts[i].desc);
+        metricNames[i] = (char *) &(ctl->event_names->evts[i].desc);
         LOGDBG("Setting metric name %s\n", metricNames[i]);
     }
 
-    double* gpuValues;
-
-    gpuValues = (double*) papi_malloc(numMetrics * sizeof(double));
+    double *gpuValues = (double*) papi_malloc(numMetrics * sizeof(double));
+    if (gpuValues == NULL) {
+        ERRDBG("malloc gpuValues failed.\n");
+        return PAPI_ENOMEM;
+    }
 
     NVPW_MetricsContext_SetCounterData_Params setCounterDataParams = {
         .structSize = NVPW_MetricsContext_SetCounterData_Params_STRUCT_SIZE,
@@ -1002,8 +1024,8 @@ static int eval_metric_values_per_gpu(NVPA_MetricsContext* pMetricsContext, cupt
     NVPW_CALL(NVPW_MetricsContext_EvaluateToGpuValuesPtr(&evalToGpuParams), return PAPI_ENOSUPP);
     papi_free(metricNames);
     // char rangeName[100];
-    for (i=0; i < (int) ctl->event_names.count; i++) {
-        ctl->event_names.evts[i].value = gpuValues[i];
+    for (i=0; i < (int) ctl->event_names->count; i++) {
+        ctl->event_names->evts[i].value = gpuValues[i];
     }
     papi_free(gpuValues);
 fn_exit:
@@ -1018,7 +1040,7 @@ static int get_metric_values(cuptip_control_t *state)
     cuptip_gpu_control_t *ctl;
     for (gpu_id=0; gpu_id<num_gpus; gpu_id++) {
         ctl = &(state->ctl[gpu_id]);
-        if (ctl->event_names.count == 0)
+        if (ctl->event_names->count == 0)
             continue;
         errno = get_chip_name(gpu_id, chip_name);
         if (errno != PAPI_OK) {
@@ -1040,8 +1062,8 @@ static int get_metric_values(cuptip_control_t *state)
 
         errno = eval_metric_values_per_gpu(metricsContextCreateParams.pMetricsContext, ctl);
         LOGDBG("Measured values from gpu %d\n", ctl->gpu_id);
-        for (i=0; i < (int) ctl->event_names.count; i++) {
-            LOGDBG("%s\t%lf\n", ctl->event_names.evts[i].name, ctl->event_names.evts[i].value);  // check nv_name here
+        for (i=0; i < (int) ctl->event_names->count; i++) {
+            LOGDBG("%s\t%lf\n", ctl->event_names->evts[i].name, ctl->event_names->evts[i].value);  // check nv_name here
         }
 
         NVPW_MetricsContext_Destroy_Params metricsContextDestroyParams = {
@@ -1079,8 +1101,9 @@ static int init_all_metrics(void)
 {
     int gpu_id, errno;
     avail_events = (list_metrics_t *) papi_calloc(num_gpus, sizeof(list_metrics_t));
-    if (avail_events == NULL)
+    if (avail_events == NULL) {
         return PAPI_ENOMEM;
+    }
     for (gpu_id=0; gpu_id<num_gpus; gpu_id++) {
         errno = get_chip_name(gpu_id, avail_events[gpu_id].chip_name);
         if (errno != PAPI_OK)
@@ -1091,7 +1114,7 @@ static int init_all_metrics(void)
 
 int cuptip_enumerate_all_metric_names(event_list_t *all_evt_names)
 {
-    int gpu_id, i, found, listsubmetrics=1, errno;
+    int gpu_id, i, found, listsubmetrics=1, errno = PAPI_OK;
     if (avail_events[0].nv_metrics != NULL)  // Already eumerated for 1st device? Then exit...
         goto fn_exit;
     STOPWATCH;
@@ -1125,17 +1148,17 @@ int cuptip_enumerate_all_metric_names(event_list_t *all_evt_names)
         NVPW_CALL(NVPW_MetricsContext_GetMetricNames_BeginPtr(&getMetricNameBeginParams), return PAPI_ENOSUPP);
 
         avail_events[gpu_id].num_metrics = getMetricNameBeginParams.numMetrics;
-        avail_events[gpu_id].nv_metrics = (event_list_t *) malloc(sizeof(event_list_t));
+        avail_events[gpu_id].nv_metrics = initialize_dynamic_event_list_size(avail_events[gpu_id].num_metrics);
         if (avail_events[gpu_id].nv_metrics == NULL) {
-            return PAPI_ENOMEM;
-        }
-        errno = initialize_dynamic_event_list_size(avail_events[gpu_id].nv_metrics, avail_events[gpu_id].num_metrics);
-        if (errno != PAPI_OK)
+            errno = PAPI_ENOMEM;
             goto fn_exit;
+        }
         for (i=0; i<avail_events[gpu_id].num_metrics; i++) {
             errno = insert_event_record(avail_events[gpu_id].nv_metrics,
                                       getMetricNameBeginParams.ppMetricNames[i],
                                       i, 0);
+            if (errno != PAPI_OK)
+                goto fn_exit;
         }
 
         NVPW_MetricsContext_GetMetricNames_End_Params getMetricNameEndParams = {
@@ -1157,10 +1180,14 @@ int cuptip_enumerate_all_metric_names(event_list_t *all_evt_names)
             len = snprintf(evt_name, PAPI_2MAX_STR_LEN, "%s:device=%d", avail_events[gpu_id].nv_metrics->evts[i].name, gpu_id);
             if (len > PAPI_2MAX_STR_LEN) {
                 ERRDBG("String formatting exceeded maximum length.\n");
-                return PAPI_ENOMEM;
+                errno = PAPI_ENOMEM;
+                goto fn_exit;
             }
             if (find_event_name(all_evt_names, evt_name, &find) == PAPI_ENOEVNT) {
                 errno = insert_event_record(all_evt_names, evt_name, i, 0);
+                if (errno != PAPI_OK) {
+                    goto fn_exit;
+                }
             }
             // LOGDBG("Name:\t\t%s\nDescription:\t%s\n\n",
             //    all_evt_names->evts[all_evt_names->count-1].name, avail_events[gpu_id].nv_metrics->evts[i].desc);
@@ -1170,7 +1197,7 @@ int cuptip_enumerate_all_metric_names(event_list_t *all_evt_names)
     TIMEDBG("Time to transfer all metric names to component =");
     LOGDBG("Total metric names for %d gpus = %d\n", num_gpus, all_evt_names->count);
 fn_exit:
-    return PAPI_OK;
+    return errno;
 }
 
 int cuptip_get_event_description(const char *evt_name, char *description)
@@ -1244,9 +1271,9 @@ static void free_all_enumerated_metrics(void)
             NVPW_MetricsContext_DestroyPtr(&metricsContextDestroyParams);
         }
         if (avail_events[gpu_id].nv_metrics)
-            free_event_name_list(avail_events[gpu_id].nv_metrics);
+            free_event_name_list( &(avail_events[gpu_id].nv_metrics) );
     }
-    free(avail_events);
+    papi_free(avail_events);
     avail_events = NULL;
 }
 
@@ -1349,7 +1376,7 @@ int cuptip_control_destroy(void **pctl)
     cuptip_control_t *state = (cuptip_control_t *) (*pctl);
     int i, j;
     for (i=0; i<num_gpus; i++) {
-        reset_cupti_prof_config_images(&(state->ctl[i]));
+        reset_cupti_prof_config_images( &(state->ctl[i]) );
         free_event_name_list( &(state->ctl[i].event_names) );
         for (j=0; j < state->ctl[i].rmr_count; j++) {
             papi_free((void *) state->ctl[i].rmr[j].pMetricName);
@@ -1379,10 +1406,10 @@ int cuptip_start(void **pctl, void **pcu_ctx)
     int errno = PAPI_OK;
     for (gpu_id=0; gpu_id<num_gpus; gpu_id++) {
         ctl = &(state->ctl[gpu_id]);
-        LOGDBG("Device num %d: event_count %d, rmr count %d\n", gpu_id, ctl->event_names.count, ctl->rmr_count);
-        if (ctl->event_names.count == 0)
+        if (ctl->event_names->count == 0)
             continue;
-        errno = devmask_check_and_acquire(&(state->ctl[gpu_id].event_names));
+        LOGDBG("Device num %d: event_count %d, rmr count %d\n", gpu_id, ctl->event_names->count, ctl->rmr_count);
+        errno = devmask_check_and_acquire(state->ctl[gpu_id].event_names);
         if (errno != PAPI_OK) {
             ERRDBG("Profiling same gpu from multiple event sets not allowed.\n");
             return errno;
@@ -1415,11 +1442,12 @@ int cuptip_start(void **pctl, void **pcu_ctx)
         }
     }
     state->running = True;
+fn_exit:
     CUDA_CALL(cuCtxSetCurrentPtr(userCtx), return PAPI_ENOSUPP);
-    return PAPI_OK;
+    return errno;
 fn_fail:
-    CUDA_CALL(cuCtxSetCurrentPtr(userCtx), return PAPI_ENOSUPP);
-    return PAPI_ECMP;
+    errno = PAPI_ECMP;
+    goto fn_exit;
 }
 
 int cuptip_stop(void **pctl, void **pcu_ctx)
@@ -1442,7 +1470,7 @@ int cuptip_stop(void **pctl, void **pcu_ctx)
     }
     for (gpu_id=0; gpu_id<num_gpus; gpu_id++) {
         ctl = &(state->ctl[gpu_id]);
-        if (ctl->event_names.count == 0)
+        if (ctl->event_names->count == 0)
             continue;
         CUDA_CALL(cuCtxSetCurrentPtr(cu_ctx[gpu_id]), return PAPI_ENOSUPP);
         errno = end_profiling(ctl);
@@ -1450,16 +1478,17 @@ int cuptip_stop(void **pctl, void **pcu_ctx)
             ERRDBG("Failed to stop profiling on gpu %d\n", gpu_id);
             goto fn_fail;
         }
-        errno = devmask_release(&(state->ctl[gpu_id].event_names));
+        errno = devmask_release(state->ctl[gpu_id].event_names);
         if (errno != PAPI_OK)
             goto fn_fail;
     }
     state->running = False;
+fn_exit:
     CUDA_CALL(cuCtxSetCurrentPtr(userCtx), return PAPI_ENOSUPP);
     return errno;
 fn_fail:
-    CUDA_CALL(cuCtxSetCurrentPtr(userCtx), return PAPI_ENOSUPP);
-    return PAPI_ECMP;
+    errno = PAPI_ECMP;
+    goto fn_exit;
 }
 
 static enum collection_method_e get_event_collection_method(const char *evt_name)
@@ -1485,17 +1514,17 @@ int cuptip_control_read(void **pctl, long long *values)
     errno = get_metric_values(state);
     for (gpu_id=0; gpu_id<num_gpus; gpu_id++) {
         ctl = &(state->ctl[gpu_id]);
-        if (ctl->event_names.count == 0)
+        if (ctl->event_names->count == 0)
             continue;
-        for (i=0; i < (int) ctl->event_names.count; i++) {
-            evt_pos = ctl->event_names.evts[i].evt_pos;
-            val = (long long) ctl->event_names.evts[i].value;
+        for (i=0; i < (int) ctl->event_names->count; i++) {
+            evt_pos = ctl->event_names->evts[i].evt_pos;
+            val = (long long) ctl->event_names->evts[i].value;
 
             if (state->read_count == 0) {
                 values[evt_pos] = val;
             }
             else {
-                switch (get_event_collection_method(ctl->event_names.evts[i].name)) {
+                switch (get_event_collection_method(ctl->event_names->evts[i].name)) {
                     case RunningSum:
                         values[evt_pos] += val;
                         break;

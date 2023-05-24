@@ -100,9 +100,15 @@ static int load_cudart_sym(void)
 {
     char dlname[] = "libcudart.so";
     char *found_files[MAX_FILES];
+    char lookup_path[PATH_MAX];
     int count, i, found = 0;
     char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
     if (papi_cuda_root) {
+        sprintf(lookup_path, "%s/lib64/%s", papi_cuda_root, dlname);
+        dl_rt = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
+        if (dl_rt) {
+            goto fn_resume;
+        }
         count = search_files_in_path(dlname, papi_cuda_root, found_files);
         for (i = 0; i < count; i++) {
             dl_rt = dlopen(found_files[i], RTLD_NOW | RTLD_GLOBAL);
@@ -112,7 +118,7 @@ static int load_cudart_sym(void)
             }
         }
         for (i = 0; i < count; i++) {
-            free(found_files[i]);
+            papi_free(found_files[i]);
         }
     }
     if (!found) {
@@ -122,7 +128,7 @@ static int load_cudart_sym(void)
             goto fn_fail;
         }
     }
-
+fn_resume:
     cudaGetDevicePtr           = DLSYM_AND_CHECK(dl_rt, "cudaGetDevice");
     cudaGetDeviceCountPtr      = DLSYM_AND_CHECK(dl_rt, "cudaGetDeviceCount");
     cudaGetDevicePropertiesPtr = DLSYM_AND_CHECK(dl_rt, "cudaGetDeviceProperties");
@@ -161,9 +167,20 @@ static int load_cupti_common_sym(void)
 {
     char dlname[] = "libcupti.so";
     char *found_files[MAX_FILES];
+    char lookup_path[PATH_MAX];
     int count, i, found = 0;
     char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
     if (papi_cuda_root) {
+        sprintf(lookup_path, "%s/extras/CUPTI/lib64/%s", papi_cuda_root, dlname);
+        dl_cupti = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
+        if (dl_cupti) {
+            goto fn_resume;
+        }
+        sprintf(lookup_path, "%s/lib64/%s", papi_cuda_root, dlname);
+        dl_cupti = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
+        if (dl_cupti) {
+            goto fn_resume;
+        }
         count = search_files_in_path(dlname, papi_cuda_root, found_files);
         for (i = 0; i < count; i++) {
             dl_cupti = dlopen(found_files[i], RTLD_NOW | RTLD_GLOBAL);
@@ -173,7 +190,7 @@ static int load_cupti_common_sym(void)
             }
         }
         for (i =0; i < count; i++) {
-            free(found_files[i]);
+            papi_free(found_files[i]);
         }
     }
     if (!found) {
@@ -183,6 +200,7 @@ static int load_cupti_common_sym(void)
             goto fn_fail;
         }
     }
+fn_resume:
     cuptiGetVersionPtr = DLSYM_AND_CHECK(dl_cupti, "cuptiGetVersion");
 
     Dl_info info;
@@ -368,7 +386,7 @@ int cucontext_array_init(void **pcuda_context)
 
 int cucontext_array_free(void **pcuda_context)
 {
-    free(*pcuda_context);
+    papi_free(*pcuda_context);
     *pcuda_context = NULL;
     return PAPI_OK;
 }
