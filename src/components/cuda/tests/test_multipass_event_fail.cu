@@ -1,4 +1,6 @@
 #include <stdio.h>
+
+#ifdef PAPI
 #include "papi.h"
 #include "papi_test.h"
 
@@ -73,14 +75,16 @@ int test_PAPI_add_events(int *EventSet, int numEvents, char **EventName) {
 fail:
     return FAIL;
 }
+#endif
 
 int main(int argc, char **argv)
 {
+#ifdef PAPI
     int papi_errno, pass;
     int event_set;
 
-    char *test_quiet = getenv("PAPI_CUDA_TEST_QUIET");
     quiet = 0;
+    char *test_quiet = getenv("PAPI_CUDA_TEST_QUIET");
     if (test_quiet)
         quiet = (int) strtol(test_quiet, (char**) NULL, 10);
 
@@ -159,5 +163,8 @@ int main(int argc, char **argv)
         test_pass(__FILE__);
 
     PAPI_shutdown();
+#else
+    fprintf(stderr, "Please compile with -DPAPI to test this feature.\n");
+#endif
     return 0;
 }

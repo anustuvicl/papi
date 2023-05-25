@@ -51,17 +51,14 @@
 
 // System includes
 #include <stdio.h>
-#include <assert.h>
 
 // CUDA runtime
 #include <cuda.h>
 #include <timer.h>
 
+#ifdef PAPI
 #include "papi.h"
 #include "papi_test.h"
-
-#if not defined PAPI
-#undef PAPI
 #endif
 
 #ifndef MAX
@@ -389,8 +386,11 @@ int main( int argc, char **argv )
         CHECK_CU_ERROR( cuCtxDestroy(ctx[i]), "cuCtxDestroy");
     }
 
+#ifdef PAPI
     if ( diff < 1e-5 )
         test_pass(__FILE__);
     else
         test_fail(__FILE__, __LINE__, "Result of GPU calculation doesn't match CPU.", PAPI_EINVAL);
+#endif
+    return 0;
 }

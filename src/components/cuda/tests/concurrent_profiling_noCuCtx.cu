@@ -27,10 +27,13 @@
 // This code has been adapted to PAPI from 
 // `<CUDA-TOOLKIT-11.4>/extras/CUPTI/samples/concurrent_profiling/cpncurrent_profiling.cu`
 
+#ifdef PAPI
 extern "C" {
     #include <papi.h>
     #include "papi_test.h"
 }
+#endif
+
 // Standard CUDA, CUPTI, Profiler, NVPW headers
 #include "cuda.h"
 
@@ -51,6 +54,7 @@ using ::std::vector;
 #define PRINT(quiet, format, args...) {if (!quiet) {fprintf(stderr, format, ## args);}}
 int quiet;
 
+#ifdef PAPI
 #define PAPI_CALL(apiFuncCall)                                          \
 do {                                                                           \
     int _status = apiFuncCall;                                         \
@@ -59,6 +63,7 @@ do {                                                                           \
         test_fail(__FILE__, __LINE__, "", _status);  \
     }                                                                          \
 } while (0)
+#endif
 
 // Helpful error handlers for standard CUPTI and CUDA runtime calls
 #define RUNTIME_API_CALL(apiFuncCall)                                          \
@@ -141,10 +146,11 @@ void profileKernels(perDeviceData &d,
                     vector<string> const &metricNames,
                     char const * const rangeName, bool serial)
 {
+    RUNTIME_API_CALL(cudaSetDevice(d.config.device));  // Orig code has mistake here
+#ifdef PAPI
     int eventset = PAPI_NULL, i, papi_errno;
     PAPI_CALL(PAPI_create_eventset(&eventset));
     // Switch to desired device
-    RUNTIME_API_CALL(cudaSetDevice(d.config.device));  // Orig code has mistake here
     string evt_name;
     for (i = 0; i < metricNames.size(); i++) {
         evt_name = metricNames[i] + std::to_string(d.config.device);
@@ -156,7 +162,7 @@ void profileKernels(perDeviceData &d,
         }
     }
     PAPI_CALL(PAPI_start(eventset));
-
+#endif
     for (unsigned int stream = 0; stream < d.streams.size(); stream++)
     {
         cudaStream_t streamId = (serial ? 0 : d.streams[stream]);
@@ -175,9 +181,11 @@ void profileKernels(perDeviceData &d,
     {
         RUNTIME_API_CALL(cudaStreamSynchronize(0));
     }
+#ifdef PAPI
     PAPI_CALL(PAPI_stop(eventset, d.values));
     PAPI_CALL(PAPI_cleanup_eventset(eventset));
     PAPI_CALL(PAPI_destroy_eventset(&eventset));
+#endif
 }
 
 void print_measured_values(perDeviceData &d, vector<string> const &metricNames)
@@ -193,8 +201,10 @@ void print_measured_values(perDeviceData &d, vector<string> const &metricNames)
 
 int main(int argc, char **argv)
 {
-    char *test_quiet = getenv("PAPI_CUDA_TEST_QUIET");
     quiet = 0;
+    int i;
+#ifdef PAPI
+    char *test_quiet = getenv("PAPI_CUDA_TEST_QUIET");
     if (test_quiet)
         quiet = (int) strtol(test_quiet, (char**) NULL, 10);
 
@@ -205,7 +215,6 @@ int main(int argc, char **argv)
         test_skip(__FILE__, __LINE__, "", 0);
     }
 
-    int i;
     vector<string> metricNames;
     for (i=0; i < event_count; i++) {
         metricNames.push_back(argv[i+1]);
@@ -215,6 +224,9 @@ int main(int argc, char **argv)
     if (PAPI_library_init(PAPI_VER_CURRENT) != PAPI_VER_CURRENT) {
         test_fail(__FILE__, __LINE__, "PAPI_library_init failed.", 0);
     }
+#else
+    vector<string> metricNames = {""};
+#endif
 
     int numDevices;
     RUNTIME_API_CALL(cudaGetDeviceCount(&numDevices));
@@ -242,7 +254,9 @@ int main(int argc, char **argv)
     if (numDevices == 0)
     {
         fprintf(stderr, "No devices detected compatible with CUPTI Profiling (Compute Capability >= 7.0)\n");
+#ifdef PAPI
         test_skip(__FILE__, __LINE__, "", 0);
+#endif
     }
 
     // Initialize kernel input to some known numbers
@@ -357,10 +371,12 @@ int main(int argc, char **argv)
     }
     else
     {
-        if ( PAPI_OK != PAPI_thread_init((unsigned long (*)(void)) std::this_thread::get_id) ) {
-            fprintf(stderr, "Error setting thread id function.\n");
-            exit(-1);
+#ifdef PAPI
+        int papi_errno = PAPI_thread_init((unsigned long (*)(void)) std::this_thread::get_id);
+        if ( papi_errno != PAPI_OK ) {
+            test_fail(__FILE__, __LINE__, "Error setting thread id function.\n", papi_errno);
         }
+#endif
         PRINT(quiet, "Running on %d devices, one thread per device.\n", numDevices);
 
         // Time creation of the same multiple streams (on multiple devices, if possible)
@@ -382,8 +398,9 @@ int main(int argc, char **argv)
         // Record time used when launching on multiple devices
         end_time = ::std::chrono::high_resolution_clock::now();
         int elapsed_multiple_device_ms = ::std::chrono::duration_cast<::std::chrono::milliseconds>(end_time - begin_time).count();
+        double ratio = elapsed_multiple_device_ms / (double) elapsed_single_device_ms;
         PRINT(quiet, "It took %d ms on the host to profile the same %d kernels on each of the %d devices in parallel\n", elapsed_multiple_device_ms, numKernels, numDevices);
-        PRINT(quiet, "--> Wallclock ratio of parallel device launch to single device launch is %ld\n", elapsed_multiple_device_ms / (double) elapsed_single_device_ms);
+        PRINT(quiet, "--> Wallclock ratio of parallel device launch to single device launch is %f\n", ratio);
         PRINT(quiet, "--> If the ratio is close to 1, that means there was little overhead to profile in parallel on multiple devices compared to profiling on a single device.\n");
         PRINT(quiet, "--> If the devices have different performance, the ratio may not be close to one, and this should be limited by the slowest device.\n");
     }
@@ -398,6 +415,7 @@ int main(int argc, char **argv)
         }
     }
 
+#ifdef PAPI
     // Display metric values
     PRINT(quiet, "\nMetrics for device #0:\n");
     PRINT(quiet, "Look at the sm__cycles_elapsed.max values for each test.\n");
@@ -417,5 +435,6 @@ int main(int argc, char **argv)
     }
     PAPI_shutdown();
     test_pass(__FILE__);
+#endif
     return 0;
 }

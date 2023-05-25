@@ -3,11 +3,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include "gpu_work.h"
+
+#ifdef PAPI
 #include <papi.h>
 #include <papi_test.h>
-
-#define PRINT(quiet, format, args...) {if (!quiet) {fprintf(stderr, format, ## args);}}
-int quiet;
 
 #define PAPI_CALL(apiFuncCall)                                          \
 do {                                                                           \
@@ -17,6 +16,10 @@ do {                                                                           \
         test_fail(__FILE__, __LINE__, "", _status);  \
     }                                                                          \
 } while (0)
+#endif
+
+#define PRINT(quiet, format, args...) {if (!quiet) {fprintf(stderr, format, ## args);}}
+int quiet;
 
 #define RUNTIME_API_CALL(apiFuncCall)                                          \
 do {                                                                           \
@@ -57,15 +60,16 @@ void *thread_gpu(void * ptinfo)
     int idx = tinfo->idx;
     int gpuid = idx % numGPUs;
     unsigned long gettid = (unsigned long) pthread_self();
-    int papi_errno;
-
-    int EventSet = PAPI_NULL;
-    long long values[1];
-    PAPI_CALL(PAPI_create_eventset(&EventSet));
 
     DRIVER_API_CALL(cuCtxSetCurrent(tinfo->cuCtx));
     PRINT(quiet, "This is idx %d thread %lu - using GPU %d context %p!\n",
             idx, gettid, gpuid, tinfo->cuCtx);
+
+#ifdef PAPI
+    int papi_errno;
+    int EventSet = PAPI_NULL;
+    long long values[1];
+    PAPI_CALL(PAPI_create_eventset(&EventSet));
 
     papi_errno = PAPI_add_named_event(EventSet, g_evt_names[idx]);
     if (papi_errno != PAPI_OK) {
@@ -79,8 +83,11 @@ void *thread_gpu(void * ptinfo)
         tinfo->retval = papi_errno;
         return NULL;
     }
+#endif
+
     VectorAddSubtract(5000000*(idx+1), quiet);  // gpu work
 
+#ifdef PAPI
     PAPI_CALL(PAPI_stop(EventSet, values));
 
     PRINT(quiet, "User measured values in thread id %d.\n", idx);
@@ -89,13 +96,15 @@ void *thread_gpu(void * ptinfo)
 
     PAPI_CALL(PAPI_cleanup_eventset(EventSet));
     PAPI_CALL(PAPI_destroy_eventset(&EventSet));
+#endif
     return NULL;
 }
 
 int main(int argc, char **argv)
 {
-    char *test_quiet = getenv("PAPI_CUDA_TEST_QUIET");
     quiet = 0;
+#ifdef PAPI
+    char *test_quiet = getenv("PAPI_CUDA_TEST_QUIET");
     if (test_quiet)
         quiet = (int) strtol(test_quiet, (char**) NULL, 10);
     g_event_count = argc - 1;
@@ -105,7 +114,7 @@ int main(int argc, char **argv)
         test_skip(__FILE__, __LINE__, "", 0);
     }
     g_evt_names = argv + 1;
-
+#endif
     int rc, i;
     pthread_params_t data[NUM_THREADS];
 
@@ -113,13 +122,14 @@ int main(int argc, char **argv)
     PRINT(quiet, "No. of GPUs = %d\n", numGPUs);
     PRINT(quiet, "No. of threads to launch = %d\n", NUM_THREADS);
 
+#ifdef PAPI
     int papi_errno = PAPI_library_init( PAPI_VER_CURRENT );
     if( papi_errno != PAPI_VER_CURRENT ) {
         test_fail(__FILE__, __LINE__, "PAPI_library_init failed.", 0);
     }
     // Point PAPI to function that gets the thread id
     PAPI_CALL(PAPI_thread_init((unsigned long (*)(void)) pthread_self));
-
+#endif
     // Launch the threads
     for(i = 0; i < NUM_THREADS; i++)
     {
@@ -148,6 +158,7 @@ int main(int argc, char **argv)
         DRIVER_API_CALL(cuCtxDestroy(data[i].cuCtx));
     }
 
+#ifdef PAPI
     PAPI_shutdown();
     // Check test pass/fail
     int retval = PAPI_OK;
@@ -158,5 +169,8 @@ int main(int argc, char **argv)
         test_pass(__FILE__);
     else
         test_fail(__FILE__, __LINE__, "Test condition not satisfied.", 0);
+#else
+    fprintf(stderr, "Please compile with -DPAPI to test this feature.\n");
+#endif
     return 0;
 }

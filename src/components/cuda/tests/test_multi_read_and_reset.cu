@@ -1,7 +1,10 @@
 #include <stdio.h>
+#include "gpu_work.h"
+
+#ifdef PAPI
 #include <papi.h>
 #include "papi_test.h"
-#include "gpu_work.h"
+#endif
 
 #define COMP_NAME "cuda"
 #define MAX_EVENT_COUNT (32)
@@ -18,18 +21,20 @@ int approx_equal(long long v1, long long v2)
 
 void multi_reset(int event_count, char **evt_names, long long *values)
 {
-    int EventSet = PAPI_NULL;
-    int papi_errno, i, j;
     CUcontext ctx;
-    papi_errno = PAPI_create_eventset(&EventSet);
-    if (papi_errno != PAPI_OK) {
-        test_fail(__FILE__, __LINE__, "Failed to create eventset.", papi_errno);
-    }
-
+    int papi_errno, i;
     papi_errno = cuCtxCreate(&ctx, 0, 0);
     if (papi_errno != CUDA_SUCCESS) {
         fprintf(stderr, "cuda error: failed to create cuda context.\n");
         exit(1);
+    }
+
+#ifdef PAPI
+    int EventSet = PAPI_NULL;
+    int j;
+    papi_errno = PAPI_create_eventset(&EventSet);
+    if (papi_errno != PAPI_OK) {
+        test_fail(__FILE__, __LINE__, "Failed to create eventset.", papi_errno);
     }
 
     for (i=0; i < event_count; i++) {
@@ -44,9 +49,11 @@ void multi_reset(int event_count, char **evt_names, long long *values)
     if (papi_errno != PAPI_OK) {
         test_fail(__FILE__, __LINE__, "PAPI_start error.", papi_errno);
     }
+#endif
 
     for (i=0; i<10; i++) {
         VectorAddSubtract(100000, quiet);
+#ifdef PAPI
         papi_errno = PAPI_read(EventSet, values);
         if (papi_errno != PAPI_OK) {
             test_fail(__FILE__, __LINE__, "PAPI_read error.", papi_errno);
@@ -59,7 +66,9 @@ void multi_reset(int event_count, char **evt_names, long long *values)
         if (papi_errno != PAPI_OK) {
             test_fail(__FILE__, __LINE__, "PAPI_reset error.", papi_errno);
         }
+#endif
     }
+#ifdef PAPI
     papi_errno = PAPI_stop(EventSet, values);
     if (papi_errno != PAPI_OK) {
         test_fail(__FILE__, __LINE__, "PAPI_stop error.", papi_errno);
@@ -74,7 +83,7 @@ void multi_reset(int event_count, char **evt_names, long long *values)
     if (papi_errno != PAPI_OK) {
         test_fail(__FILE__, __LINE__, "PAPI_destroy_eventset error.", papi_errno);
     }
-
+#endif
     papi_errno = cuCtxDestroy(ctx);
     if (papi_errno != CUDA_SUCCESS) {
         fprintf(stderr, "cude error: failed to destroy context.\n");
@@ -84,18 +93,19 @@ void multi_reset(int event_count, char **evt_names, long long *values)
 
 void multi_read(int event_count, char **evt_names, long long *values)
 {
-    int EventSet = PAPI_NULL;
-    int papi_errno, i, j;
     CUcontext ctx;
-    papi_errno = PAPI_create_eventset(&EventSet);
-    if (papi_errno != PAPI_OK) {
-        test_fail(__FILE__, __LINE__, "Failed to create eventset.", papi_errno);
-    }
-
+    int papi_errno, i;
     papi_errno = cuCtxCreate(&ctx, 0, 0);
     if (papi_errno != CUDA_SUCCESS) {
         fprintf(stderr, "cuda error: failed to create cuda context.\n");
         exit(1);
+    }
+
+#ifdef PAPI
+    int EventSet = PAPI_NULL, j;
+    papi_errno = PAPI_create_eventset(&EventSet);
+    if (papi_errno != PAPI_OK) {
+        test_fail(__FILE__, __LINE__, "Failed to create eventset.", papi_errno);
     }
 
     for (i=0; i < event_count; i++) {
@@ -110,8 +120,10 @@ void multi_read(int event_count, char **evt_names, long long *values)
     if (papi_errno != PAPI_OK) {
         test_fail(__FILE__, __LINE__, "PAPI_start error.", papi_errno);
     }
+#endif
     for (i=0; i<10; i++) {
         VectorAddSubtract(100000, quiet);
+#ifdef PAPI
         papi_errno = PAPI_read(EventSet, values);
         if (papi_errno != PAPI_OK) {
             test_fail(__FILE__, __LINE__, "PAPI_start error.", papi_errno);
@@ -132,7 +144,9 @@ void multi_read(int event_count, char **evt_names, long long *values)
     papi_errno = PAPI_destroy_eventset(&EventSet);
     if (papi_errno != PAPI_OK) {
         test_fail(__FILE__, __LINE__, "PAPI_destroy_eventset error.", papi_errno);
+#endif
     }
+
     papi_errno = cuCtxDestroy(ctx);
     if (papi_errno != CUDA_SUCCESS) {
         fprintf(stderr, "cude error: failed to destroy context.\n");
@@ -142,17 +156,18 @@ void multi_read(int event_count, char **evt_names, long long *values)
 
 void single_read(int event_count, char **evt_names, long long *values)
 {
-    int EventSet = PAPI_NULL;
-    int papi_errno, i, j;
+    int papi_errno, i;
     CUcontext ctx;
-    papi_errno = PAPI_create_eventset(&EventSet);
-    if (papi_errno != PAPI_OK) {
-        test_fail(__FILE__, __LINE__, "Failed to create eventset.", papi_errno);
-    }
     papi_errno = cuCtxCreate(&ctx, 0, 0);
     if (papi_errno != CUDA_SUCCESS) {
         fprintf(stderr, "cuda error: failed to create cuda context.\n");
         exit(1);
+    }
+#ifdef PAPI
+    int EventSet = PAPI_NULL, j;
+    papi_errno = PAPI_create_eventset(&EventSet);
+    if (papi_errno != PAPI_OK) {
+        test_fail(__FILE__, __LINE__, "Failed to create eventset.", papi_errno);
     }
     for (i=0; i < event_count; i++) {
         papi_errno = PAPI_add_named_event(EventSet, evt_names[i]);
@@ -166,9 +181,11 @@ void single_read(int event_count, char **evt_names, long long *values)
     if (papi_errno != PAPI_OK) {
         test_fail(__FILE__, __LINE__, "PAPI_start error.", papi_errno);
     }
+#endif
     for (i=0; i<10; i++) {
         VectorAddSubtract(100000, quiet);
     }
+#ifdef PAPI
     papi_errno = PAPI_stop(EventSet, values);
     if (papi_errno != PAPI_OK) {
         test_fail(__FILE__, __LINE__, "PAPI_stop error.", papi_errno);
@@ -185,6 +202,7 @@ void single_read(int event_count, char **evt_names, long long *values)
     if (papi_errno != PAPI_OK) {
         test_fail(__FILE__, __LINE__, "PAPI_destroy_eventset error.", papi_errno);
     }
+#endif
     papi_errno = cuCtxDestroy(ctx);
     if (papi_errno != CUDA_SUCCESS) {
         fprintf(stderr, "cuda error: failed to destroy cuda context.\n");
@@ -194,11 +212,12 @@ void single_read(int event_count, char **evt_names, long long *values)
 
 int main(int argc, char **argv)
 {
-    int papi_errno;
-    papi_errno = cuInit(0);
+    cuInit(0);
 
-	char *test_quiet = getenv("PAPI_CUDA_TEST_QUIET");
     quiet = 0;
+#ifdef PAPI
+    int papi_errno;
+	char *test_quiet = getenv("PAPI_CUDA_TEST_QUIET");
     if (test_quiet)
         quiet = (int) strtol(test_quiet, (char**) NULL, 10);
 
@@ -209,7 +228,6 @@ int main(int argc, char **argv)
         fprintf(stderr, "No eventnames specified at command line.\n");
         test_skip(__FILE__, __LINE__, "", 0);
     }
-
     papi_errno = PAPI_library_init(PAPI_VER_CURRENT);
     if (papi_errno != PAPI_VER_CURRENT) {
         test_fail(__FILE__, __LINE__, "Failed to initialize PAPI.", 0);
@@ -238,5 +256,8 @@ int main(int argc, char **argv)
     }
     PAPI_shutdown();
     test_pass(__FILE__);
+#else
+    fprintf(stderr, "Please compile with -DPAPI to test this feature.\n");
+#endif
     return 0;
 }

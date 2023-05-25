@@ -39,10 +39,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifdef PAPI
 #include "papi.h"
 #include "papi_test.h"
+#endif
 
-#define PAPI 1
 #define STEP_BY_STEP_DEBUG 0 /* helps debug CUcontext issues. */
 #define PRINT(quiet, format, args...) {if (!quiet) {fprintf(stderr, format, ## args);}}
 
@@ -53,17 +54,18 @@ __global__ void helloWorld(char*);
 // Host function
 int main(int argc, char** argv)
 {
-	int papi_errno, quiet = 0;
+	int quiet = 0;
     CUcontext getCtx=NULL, sessionCtx=NULL;
     cudaError_t cudaError;
     CUresult cuError; (void) cuError;
 
+#ifdef PAPI
 	char *test_quiet = getenv("PAPI_CUDA_TEST_QUIET");
     if (test_quiet)
         quiet = (int) strtol(test_quiet, (char**) NULL, 10);
 
 	/* PAPI Initialization */
-	papi_errno = PAPI_library_init( PAPI_VER_CURRENT );
+	int papi_errno = PAPI_library_init( PAPI_VER_CURRENT );
 	if( papi_errno != PAPI_VER_CURRENT ) {
 		test_fail(__FILE__,__LINE__, "PAPI_library_init failed", 0 );
 	}
@@ -73,7 +75,6 @@ int main(int argc, char** argv)
 		PAPI_VERSION_MINOR( PAPI_VERSION ),
 		PAPI_VERSION_REVISION( PAPI_VERSION ) );
 
-#ifdef PAPI
 	int i;
 	int EventSet = PAPI_NULL;
 	int eventCount = argc - 1;
@@ -299,6 +300,7 @@ int main(int argc, char** argv)
         fprintf(stderr, "%s:%s:%i after cuCtxDestroy(%p) getCtx=%p.\n", __FILE__, __func__, __LINE__, sessionCtx, getCtx);
     }
 
+#ifdef PAPI
 	PAPI_shutdown();
 
     if (STEP_BY_STEP_DEBUG) {
@@ -307,7 +309,7 @@ int main(int argc, char** argv)
     }
 
 	test_pass(__FILE__);
-
+#endif
 	return 0;
 }
 

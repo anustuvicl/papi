@@ -30,15 +30,9 @@
  * needs a compiler that supports OpenMP 2.0
  */
 
+#ifdef PAPI
 #include <papi.h>
 #include "papi_test.h"
-
-#include "gpu_work.h"
-#include <omp.h>
-#include <stdio.h>  // stdio functions are used since C++ streams aren't necessarily thread safe
-
-#define PRINT(quiet, format, args...) {if (!quiet) {fprintf(stderr, format, ## args);}}
-int quiet;
 
 #define PAPI_CALL(apiFuncCall)                                          \
 do {                                                                           \
@@ -48,6 +42,16 @@ do {                                                                           \
         test_fail(__FILE__, __LINE__, "", _status);  \
     }                                                                          \
 } while (0)
+
+#endif
+
+
+#include "gpu_work.h"
+#include <omp.h>
+#include <stdio.h>  // stdio functions are used since C++ streams aren't necessarily thread safe
+
+#define PRINT(quiet, format, args...) {if (!quiet) {fprintf(stderr, format, ## args);}}
+int quiet;
 
 #define RUNTIME_API_CALL(apiFuncCall)                                          \
 do {                                                                           \
@@ -73,8 +77,9 @@ do {                                                                           \
 
 int main(int argc, char *argv[])
 {
-    char *test_quiet = getenv("PAPI_CUDA_TEST_QUIET");
     quiet = 0;
+#ifdef PAPI
+    char *test_quiet = getenv("PAPI_CUDA_TEST_QUIET");
     if (test_quiet)
         quiet = (int) strtol(test_quiet, (char**) NULL, 10);
 
@@ -84,6 +89,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, "No eventnames specified at command line.\n");
         test_skip(__FILE__, __LINE__, "", 0);
     }
+#endif
 
     int num_gpus = 0, i;
     CUcontext ctx_arr[MAX_THREADS];
@@ -92,7 +98,10 @@ int main(int argc, char *argv[])
 
     if (num_gpus < 1) {
         fprintf(stderr, "no CUDA capable devices were detected\n");
+#ifdef PAPI
         test_skip(__FILE__, __LINE__, "", 0);
+#endif
+        return 0;
     }
     /////////////////////////////////////////////////////////////////
     // display CPU and GPU configuration
@@ -113,11 +122,14 @@ int main(int argc, char *argv[])
     }
 
     PRINT(quiet, "---------------------------\n");
+#ifdef PAPI
     int papi_errno = PAPI_library_init( PAPI_VER_CURRENT );
     if ( papi_errno != PAPI_VER_CURRENT ) {
         test_fail(__FILE__, __LINE__, "PAPI_library_init failed.", 0);
     }
     PAPI_CALL(PAPI_thread_init((unsigned long (*)(void)) omp_get_thread_num));
+#endif
+
     omp_lock_t lock;
     omp_init_lock(&lock);
 
@@ -125,16 +137,17 @@ int main(int argc, char *argv[])
     omp_set_num_threads(num_threads);  // create as many CPU threads as there are CUDA devices
 #pragma omp parallel
     {
+        unsigned int cpu_thread_id = omp_get_thread_num();
+        unsigned int num_cpu_threads = omp_get_num_threads();
+        PRINT(quiet, "cpu_thread_id %u, num_cpu_threads %u, num_threads %d, num_gpus %d\n", cpu_thread_id, num_cpu_threads, num_threads, num_gpus);
+
+        DRIVER_API_CALL(cuCtxPushCurrent(ctx_arr[cpu_thread_id]));
+#ifdef PAPI
+        int gpu_id = cpu_thread_id % num_gpus;
         int EventSet = PAPI_NULL;
         long long values[MAX_THREADS];
         int j, errno;
         PAPI_CALL(PAPI_create_eventset(&EventSet));
-        unsigned int cpu_thread_id = omp_get_thread_num();
-        unsigned int num_cpu_threads = omp_get_num_threads();
-        PRINT(quiet, "cpu_thread_id %u, num_cpu_threads %u, num_threads %d, num_gpus %d\n", cpu_thread_id, num_cpu_threads, num_threads, num_gpus);
-        int gpu_id = cpu_thread_id % num_gpus;
-
-        DRIVER_API_CALL(cuCtxPushCurrent(ctx_arr[cpu_thread_id]));
         PRINT(quiet, "CPU thread %d (of %d) uses CUDA device %d with context %p @ eventset %d\n", cpu_thread_id, num_cpu_threads, gpu_id, ctx_arr[cpu_thread_id], EventSet);
         char tmpEventName[64];
         for (j = 0; j < event_count; j++) {
@@ -147,9 +160,9 @@ int main(int argc, char *argv[])
             }
         }
         PAPI_CALL(PAPI_start(EventSet));
-
+#endif
         VectorAddSubtract(50000*(cpu_thread_id+1), quiet);  // gpu work
-
+#ifdef PAPI
         PAPI_CALL(PAPI_stop(EventSet, values));
 
         PRINT(quiet, "User measured values.\n");
@@ -165,6 +178,7 @@ int main(int argc, char *argv[])
             test_fail(__FILE__, __LINE__, "", errno);
         }
         PAPI_CALL(PAPI_destroy_eventset(&EventSet));
+#endif
     }  // omp parallel region end
 
     for (i = 0; i < num_threads; i++) {
@@ -175,7 +189,9 @@ int main(int argc, char *argv[])
         fprintf(stderr, "%s\n", cudaGetErrorString(cudaGetLastError()));
 
     omp_destroy_lock(&lock);
+#ifdef PAPI
     PAPI_shutdown();
     test_pass(__FILE__);
+#endif
     return 0;
 }

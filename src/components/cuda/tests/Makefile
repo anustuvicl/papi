@@ -21,7 +21,8 @@ else
     NVCFLAGS :=
 endif
 
-NVCFLAGS += -g -ccbin='$(CC)'
+PAPI_FLAG = -DPAPI    # Comment this line for tests to run without PAPI profiling
+NVCFLAGS += -g -ccbin='$(CC)' $(PAPI_FLAG)
 INCLUDE += -I$(PAPI_CUDA_ROOT)/include
 CUDALIBS = -L$(PAPI_CUDA_ROOT)/lib64 -lcudart -lcuda
 PAPILIB += -L../../../libpfm4/lib -lpfm
@@ -74,10 +75,10 @@ HelloWorld_noCuCtx: HelloWorld_noCuCtx.o $(UTILOBJS)
 	$(NVCC) $(NVCFLAGS) -o HelloWorld_noCuCtx HelloWorld_noCuCtx.o $(UTILOBJS) $(PAPILIB) $(CUDALIBS) $(LDFLAGS)
 
 simpleMultiGPU: simpleMultiGPU.cu $(UTILOBJS)
-	$(NVCC) $(NVCFLAGS) $(INCLUDE) -DPAPI -g -o $@ $+ $(UTILOBJS) $(PAPILIB) $(CUDALIBS) $(LDFLAGS)
+	$(NVCC) $(NVCFLAGS) $(INCLUDE) -o $@ $+ $(UTILOBJS) $(PAPILIB) $(CUDALIBS) $(LDFLAGS)
 
 simpleMultiGPU_noCuCtx: simpleMultiGPU_noCuCtx.cu $(UTILOBJS)
-	$(NVCC) $(NVCFLAGS) $(INCLUDE) -DPAPI -g -o $@ $+ $(UTILOBJS) $(PAPILIB) $(CUDALIBS) $(LDFLAGS)
+	$(NVCC) $(NVCFLAGS) $(INCLUDE) -g -o $@ $+ $(UTILOBJS) $(PAPILIB) $(CUDALIBS) $(LDFLAGS)
 
 clean:
 	rm -f *.o $(TESTS) $(TESTS_NOCTX)
