@@ -1,3 +1,9 @@
+/**
+ * @file    lcuda_dispatch.c
+ * @author  Anustuv Pal
+ *          anustuv@icl.utk.edu
+ */
+
 #include "lcuda_config.h"
 #include "lcuda_utils.h"
 #include "lcuda_dispatch.h"

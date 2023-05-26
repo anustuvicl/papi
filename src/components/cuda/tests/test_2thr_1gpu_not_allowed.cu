@@ -1,3 +1,9 @@
+/**
+ * @file    test_2thr_1gpu_not_allowed.cu
+ * @author  Anustuv Pal
+ *          anustuv@icl.utk.edu
+ */
+
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>

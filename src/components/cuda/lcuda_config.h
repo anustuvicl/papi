@@ -1,3 +1,9 @@
+/**
+ * @file    lcuda_config.h
+ * @author  Anustuv Pal
+ *          anustuv@icl.utk.edu
+ */
+
 #ifndef __LCUDA_CONFIG_H__
 #define __LCUDA_CONFIG_H__
 

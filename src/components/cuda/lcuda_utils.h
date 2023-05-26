@@ -1,6 +1,9 @@
-/*
-    Load cuda symbols common to perfworks and events API
-*/
+/**
+ * @file    lcuda_utils.h
+ * @author  Anustuv Pal
+ *          anustuv@icl.utk.edu
+ */
+
 #ifndef __CUDA_UTILS_H__
 #define __CUDA_UTILS_H__
 

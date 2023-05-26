@@ -1,3 +1,18 @@
+/**
+ * @file    linux-cuda.c
+ * @author  Anustuv Pal
+ *          anustuv@icl.utk.edu
+ *
+ * @ingroup papi_components
+ *
+ * @brief
+ *  This file implements a PAPI component that enables PAPI-C to access
+ *  hardware monitoring counters for NVIDIA GPU devices through the CuPTI library.
+ *
+ * The open source software license for PAPI conforms to the BSD
+ * License template.
+ */
+
 #include <papi.h>
 #include <papi_internal.h>
 #include <papi_vector.h>
@@ -53,7 +68,7 @@ papi_vector_t _cuda_vector = {
         .name = "cuda",
         .short_name = "cuda",
         .version = "0.1",
-        .description = "New CUDA component using PerfWorks API",
+        .description = "CUDA profiling via NVIDIA CuPTI interfaces",
         .num_mpx_cntrs = PAPI_CUDA_MAX_COUNTERS,
         .num_cntrs = PAPI_CUDA_MAX_COUNTERS,
         .default_domain = PAPI_DOM_USER,

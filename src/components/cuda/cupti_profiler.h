@@ -1,3 +1,9 @@
+/**
+ * @file    cupti_profiler.h
+ * @author  Anustuv Pal
+ *          anustuv@icl.utk.edu
+ */
+
 #ifndef __CUPTI_PROFILER_H__
 #define __CUPTI_PROFILER_H__
 

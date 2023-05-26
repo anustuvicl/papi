@@ -1,3 +1,9 @@
+/**
+ * @file    lcuda_common.c
+ * @author  Anustuv Pal
+ *          anustuv@icl.utk.edu
+ */
+
 #include <string.h>
 #include "papi_memory.h"
 

@@ -1,5 +1,7 @@
-/*
- * Contain only functions related to cuda profiler API
+/**
+ * @file    cupti_profiler.c
+ * @author  Anustuv Pal
+ *          anustuv@icl.utk.edu
  */
 
 #include <dlfcn.h>

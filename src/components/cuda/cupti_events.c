@@ -1,3 +1,9 @@
+/**
+ * @file    cupti_events.c
+ * @author  Anustuv Pal
+ *          anustuv@icl.utk.edu
+ */
+
 #include <papi.h>
 #include "lcuda_common.h"
 

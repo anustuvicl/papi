@@ -1,3 +1,9 @@
+/**
+ * @file    lcuda_dispatch.h
+ * @author  Anustuv Pal
+ *          anustuv@icl.utk.edu
+ */
+
 #ifndef __LCUDA_DISPATCH_H__
 #define __LCUDA_DISPATCH_H__
 

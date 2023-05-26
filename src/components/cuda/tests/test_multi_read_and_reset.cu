@@ -1,3 +1,9 @@
+/**
+ * @file    test_multi_read_and_reset.cu
+ * @author  Anustuv Pal
+ *          anustuv@icl.utk.edu
+ */
+
 #include <stdio.h>
 #include "gpu_work.h"
 

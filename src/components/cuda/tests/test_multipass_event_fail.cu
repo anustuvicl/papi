@@ -1,3 +1,9 @@
+/**
+ * @file    test_multipass_event_fail.cu
+ * @author  Anustuv Pal
+ *          anustuv@icl.utk.edu
+ */
+
 #include <stdio.h>
 
 #ifdef PAPI

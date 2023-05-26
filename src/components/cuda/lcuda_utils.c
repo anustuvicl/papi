@@ -1,3 +1,9 @@
+/**
+ * @file    lcuda_utils.c
+ * @author  Anustuv Pal
+ *          anustuv@icl.utk.edu
+ */
+
 #include <dlfcn.h>
 #include <papi.h>
 #include "papi_memory.h"

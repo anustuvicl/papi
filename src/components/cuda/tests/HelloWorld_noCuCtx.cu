@@ -3,12 +3,14 @@
 /****************************/
 
 /**
- * @file    HelloWorld.c
+ * @file    HelloWorld_noCuCtx.cu
  * @author  Heike Jagode
  *          jagode@eecs.utk.edu
+ * Mods:	Anustuv Pal
+ *			anustuv@icl.utk.edu
  * Mods:	<your name here>
  *			<your email address>
- * test case for Example component
+ * test case for cuda component
  *
  *
  * @brief

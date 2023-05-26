@@ -1,3 +1,9 @@
+/**
+ * @file    pthreads.cu
+ * @author  Anustuv Pal
+ *          anustuv@icl.utk.edu
+ */
+
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>

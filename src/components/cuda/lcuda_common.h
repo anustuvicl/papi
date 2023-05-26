@@ -1,3 +1,9 @@
+/**
+ * @file    lcuda_common.h
+ * @author  Anustuv Pal
+ *          anustuv@icl.utk.edu
+ */
+
 #ifndef __LCUDA_COMMON_H__
 #define __LCUDA_COMMON_H__
 

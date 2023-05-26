@@ -1,3 +1,9 @@
+/**
+ * @file    lcuda_debug.h
+ * @author  Anustuv Pal
+ *          anustuv@icl.utk.edu
+ */
+
 #ifndef __DEBUG_COMP_H__
 #define __DEBUG_COMP_H__
 
