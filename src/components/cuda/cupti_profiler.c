@@ -193,40 +193,46 @@ static int load_nvpw_sym(void)
     COMPDBG("Entering.\n");
     char dlname[] = "libnvperf_host.so";
     char *found_files[MAX_FILES];
-    char lookup_path[PATH_MAX];
-    int count, i, found = 0;
+    int count, i;
     char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
+
+    char lookup_path[PATH_MAX];
+    const char *standard_paths[] = {
+        "%s/extras/CUPTI/lib64/%s",
+        "%s/lib64/%s",
+    };
+    int num_standard_paths = sizeof(standard_paths) / sizeof(standard_paths[0]);
+
     if (papi_cuda_root) {
-        sprintf(lookup_path, "%s/extras/CUPTI/lib64/%s", papi_cuda_root, dlname);
-        dl_nvpw = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
-        if (dl_nvpw) {
-            goto fn_resume;
+
+        for (i = 0; i < num_standard_paths; i++) {
+            sprintf(lookup_path, standard_paths[i], papi_cuda_root, dlname);
+            dl_nvpw = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
+            if (dl_nvpw) break;
         }
-        sprintf(lookup_path, "%s/lib64/%s", papi_cuda_root, dlname);
-        dl_nvpw = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
-        if (dl_nvpw) {
-            goto fn_resume;
-        }
-        count = search_files_in_path(dlname, papi_cuda_root, found_files);
-        for (i = 0; i < count; i++) {
-            dl_nvpw = dlopen(found_files[i], RTLD_NOW | RTLD_GLOBAL);
-            if (dl_nvpw) {
-                found = 1;
-                break;
+
+        if (!dl_nvpw) {
+            count = search_files_in_path(dlname, papi_cuda_root, found_files);
+            for (i = 0; i < count; i++) {
+                dl_nvpw = dlopen(found_files[i], RTLD_NOW | RTLD_GLOBAL);
+                if (dl_nvpw) {
+                    break;
+                }
+            }
+            for (i = 0; i < count; i++) {
+                papi_free(found_files[i]);
             }
         }
-        for (i = 0; i < count; i++) {
-            papi_free(found_files[i]);
-        }
     }
-    if (!found) {
+
+    if (!dl_nvpw) {
         dl_nvpw = dlopen(dlname, RTLD_NOW | RTLD_GLOBAL);
         if (!dl_nvpw) {
             ERRDBG("Loading libnvperf_host.so failed.\n");
             goto fn_fail;
         }
     }
-fn_resume:
+
     NVPW_GetSupportedChipNamesPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_GetSupportedChipNames");
     NVPW_CUDA_MetricsContext_CreatePtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_CUDA_MetricsContext_Create");
     NVPW_MetricsContext_DestroyPtr = DLSYM_AND_CHECK(dl_nvpw, "NVPW_MetricsContext_Destroy");

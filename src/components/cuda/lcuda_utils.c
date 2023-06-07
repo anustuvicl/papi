@@ -105,36 +105,45 @@ static int unload_cuda_sym(void)
 static int load_cudart_sym(void)
 {
     char dlname[] = "libcudart.so";
+    int count, i;
     char *found_files[MAX_FILES];
-    char lookup_path[PATH_MAX];
-    int count, i, found = 0;
     char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
+
+    char lookup_path[PATH_MAX];
+    const char *standard_paths[] = {
+        "%s/lib64/%s",
+    };
+    int num_standard_paths = sizeof(standard_paths) / sizeof(standard_paths[0]);
+
     if (papi_cuda_root) {
-        sprintf(lookup_path, "%s/lib64/%s", papi_cuda_root, dlname);
-        dl_rt = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
-        if (dl_rt) {
-            goto fn_resume;
+
+        for (i = 0; i < num_standard_paths; i++) {
+            sprintf(lookup_path, standard_paths[i], papi_cuda_root, dlname);
+            dl_rt = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
+            if (dl_rt) break;
         }
-        count = search_files_in_path(dlname, papi_cuda_root, found_files);
-        for (i = 0; i < count; i++) {
-            dl_rt = dlopen(found_files[i], RTLD_NOW | RTLD_GLOBAL);
-            if (dl_rt) {
-                found = 1;
-                break;
+
+        if (!dl_rt) {
+            count = search_files_in_path(dlname, papi_cuda_root, found_files);
+            for (i = 0; i < count; i++) {
+                dl_rt = dlopen(found_files[i], RTLD_NOW | RTLD_GLOBAL);
+                if (dl_rt) {
+                    break;
+                }
+            }
+            for (i = 0; i < count; i++) {
+                papi_free(found_files[i]);
             }
         }
-        for (i = 0; i < count; i++) {
-            papi_free(found_files[i]);
-        }
     }
-    if (!found) {
+    if (!dl_rt) {
         dl_rt = dlopen(dlname, RTLD_NOW | RTLD_GLOBAL);
         if (!dl_rt) {
             ERRDBG("Loading libcudart.so failed. Try setting PAPI_CUDA_ROOT\n");
             goto fn_fail;
         }
     }
-fn_resume:
+
     cudaGetDevicePtr           = DLSYM_AND_CHECK(dl_rt, "cudaGetDevice");
     cudaGetDeviceCountPtr      = DLSYM_AND_CHECK(dl_rt, "cudaGetDeviceCount");
     cudaGetDevicePropertiesPtr = DLSYM_AND_CHECK(dl_rt, "cudaGetDeviceProperties");
@@ -172,41 +181,47 @@ static int unload_cudart_sym(void)
 static int load_cupti_common_sym(void)
 {
     char dlname[] = "libcupti.so";
+    int count, i;
     char *found_files[MAX_FILES];
-    char lookup_path[PATH_MAX];
-    int count, i, found = 0;
     char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
+
+    char lookup_path[PATH_MAX];
+    const char *standard_paths[] = {
+        "%s/extras/CUPTI/lib64/%s",
+        "%s/lib64/%s",
+    };
+    int num_standard_paths = sizeof(standard_paths) / sizeof(standard_paths[0]);
+
     if (papi_cuda_root) {
-        sprintf(lookup_path, "%s/extras/CUPTI/lib64/%s", papi_cuda_root, dlname);
-        dl_cupti = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
-        if (dl_cupti) {
-            goto fn_resume;
+
+        for (i = 0; i < num_standard_paths; i++) {
+            sprintf(lookup_path, standard_paths[i], papi_cuda_root, dlname);
+            dl_cupti = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
+            if (dl_cupti) break;
         }
-        sprintf(lookup_path, "%s/lib64/%s", papi_cuda_root, dlname);
-        dl_cupti = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
-        if (dl_cupti) {
-            goto fn_resume;
-        }
-        count = search_files_in_path(dlname, papi_cuda_root, found_files);
-        for (i = 0; i < count; i++) {
-            dl_cupti = dlopen(found_files[i], RTLD_NOW | RTLD_GLOBAL);
-            if (dl_cupti) {
-                found = 1;
-                break;
+
+        if (!dl_cupti) {
+            count = search_files_in_path(dlname, papi_cuda_root, found_files);
+            for (i = 0; i < count; i++) {
+                dl_cupti = dlopen(found_files[i], RTLD_NOW | RTLD_GLOBAL);
+                if (dl_cupti) {
+                    break;
+                }
+            }
+            for (i =0; i < count; i++) {
+                papi_free(found_files[i]);
             }
         }
-        for (i =0; i < count; i++) {
-            papi_free(found_files[i]);
-        }
     }
-    if (!found) {
+
+    if (!dl_cupti) {
         dl_cupti = dlopen(dlname, RTLD_NOW | RTLD_GLOBAL);
         if (!dl_cupti) {
             ERRDBG("Loading libcupti.so failed. Try setting PAPI_CUDA_ROOT\n");
             goto fn_fail;
         }
     }
-fn_resume:
+
     cuptiGetVersionPtr = DLSYM_AND_CHECK(dl_cupti, "cuptiGetVersion");
 
     Dl_info info;

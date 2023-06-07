@@ -7,10 +7,10 @@ CUDA_MACS+= -DPAPI_CUDA_CUPTI=$(PAPI_CUDA_CUPTI) -DPAPI_CUDA_PERFWORKS=$(PAPI_CU
 
 COMPSRCS += components/cuda/linux-cuda.c \
             components/cuda/lcuda_dispatch.c \
-			components/cuda/lcuda_common.c \
-			components/cuda/lcuda_utils.c \
-			components/cuda/cupti_profiler.c \
-			components/cuda/cupti_events.c \
+            components/cuda/lcuda_common.c \
+            components/cuda/lcuda_utils.c \
+            components/cuda/cupti_profiler.c \
+            components/cuda/cupti_events.c \
 
 COMPOBJS += linux-cuda.o lcuda_dispatch.o lcuda_common.o lcuda_utils.o cupti_profiler.o cupti_events.o
 
