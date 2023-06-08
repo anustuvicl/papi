@@ -77,28 +77,28 @@ fn_exit:
     return papi_errno;
 }
 
-int cuptid_thread_info_init(void **thread_info)
+int cuptid_thread_info_init(void **pthread_info)
 {
-    return cucontext_array_init(thread_info);
+    return cucontext_array_init(pthread_info);
 }
 
-int cuptid_thread_info_free(void **thread_info)
+int cuptid_thread_info_free(void **pthread_info)
 {
-    return cucontext_array_free(thread_info);
+    return cucontext_array_free(pthread_info);
 }
 
-int cuptid_control_create(event_list_t *event_names, int event_count, int *evt_ids, void **pcupti_ctl, void **pcu_ctx)
+int cuptid_control_create(event_list_t *event_names, int event_count, int *evt_ids, void *thread_info, void **pcupti_ctl)
 {
     if (util_runtime_is_perfworks_api()) {
 
 #if defined(API_PERFWORKS)
-        return cuptip_control_create(event_names, event_count, evt_ids, pcupti_ctl, pcu_ctx);
+        return cuptip_control_create(event_names, event_count, evt_ids, thread_info, pcupti_ctl);
 #endif
 
     } else if (util_runtime_is_events_api()) {
 
 #if defined (API_EVENTS)
-        return cuptie_control_create(event_names, event_count, evt_ids, pcupti_ctl, pcu_ctx);
+        return cuptie_control_create(event_names, event_count, evt_ids, thread_info, pcupti_ctl);
 #endif
 
     }
@@ -123,72 +123,72 @@ int cuptid_control_destroy(void **pcupti_ctl)
     return PAPI_ECMP;
 }
 
-int cuptid_start(void *pcupti_ctl, void **pcu_ctx)
+int cuptid_start(void *cupti_ctl, void *thread_info)
 {
     if (util_runtime_is_perfworks_api()) {
 
 #if defined(API_PERFWORKS)
-        return cuptip_start(pcupti_ctl, pcu_ctx);
+        return cuptip_start(cupti_ctl, thread_info);
 #endif
 
     } else if (util_runtime_is_events_api()) {
 
 #if defined(API_EVENTS)
-        return cuptie_start(pcupti_ctl, pcu_ctx);
+        return cuptie_start(cupti_ctl, thread_info);
 #endif
 
     }
     return PAPI_ECMP;
 }
 
-int cuptid_stop(void *pcupti_ctl, void **pcu_ctx)
+int cuptid_stop(void *cupti_ctl, void *thread_info)
 {
     if (util_runtime_is_perfworks_api()) {
 
 #if defined(API_PERFWORKS)
-        return cuptip_stop(pcupti_ctl, pcu_ctx);
+        return cuptip_stop(cupti_ctl, thread_info);
 #endif
 
     } else if (util_runtime_is_events_api()) {
 
 #if defined(API_EVENTS)
-        return cuptie_stop(pcupti_ctl, pcu_ctx);
+        return cuptie_stop(cupti_ctl, thread_info);
 #endif
 
     }
     return PAPI_ECMP;
 }
 
-int cuptid_control_read(void *pcupti_ctl, long long *values)
+int cuptid_control_read(void *cupti_ctl, long long *values)
 {
     if (util_runtime_is_perfworks_api()) {
 
 #if defined(API_PERFWORKS)
-        return cuptip_control_read(pcupti_ctl, values);
+        return cuptip_control_read(cupti_ctl, values);
 #endif
 
     } else if (util_runtime_is_events_api()) {
 
 #if defined(API_EVENTS)
-        return cuptie_control_read(pcupti_ctl, values);
+        return cuptie_control_read(cupti_ctl, values);
 #endif
 
     }
     return PAPI_ECMP;
 }
 
-int cuptid_control_reset(void *pcupti_ctl)
+int cuptid_control_reset(void *cupti_ctl)
 {
     if (util_runtime_is_perfworks_api()) {
 
 #if defined(API_PERFWORKS)
-        return cuptip_control_reset(pcupti_ctl);
+        return cuptip_control_reset(cupti_ctl);
 #endif
 
     } else if (util_runtime_is_events_api()) {
 
 #if defined(API_EVENTS)
-        return cuptie_control_reset(pcupti_ctl);
+        return cuptie_control_reset(cupti_ctl);
 #endif
 
     }

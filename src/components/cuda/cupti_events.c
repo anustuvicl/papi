@@ -19,7 +19,7 @@ int cuptie_init(char **pdisabled_reason)
     return PAPI_ENOIMPL;
 }
 
-int cuptie_control_create(event_list_t *all_event_names, int event_count, int *evt_ids, void **pctl, void **pcu_ctx)
+int cuptie_control_create(event_list_t *all_event_names, int event_count, int *evt_ids, void *thr_info, void **pctl)
 {
     return PAPI_ENOIMPL;
 }
@@ -29,22 +29,22 @@ int cuptie_control_destroy(void **pctl)
     return PAPI_ENOIMPL;
 }
 
-int cuptie_start(void **pctl, void **pcu_ctx)
+int cuptie_start(void *ctl, void *thr_info)
 {
     return PAPI_ENOIMPL;
 }
 
-int cuptie_stop(void **pctl, void **pcu_ctx)
+int cuptie_stop(void *ctl, void *thr_info)
 {
     return PAPI_ENOIMPL;
 }
 
-int cuptie_control_read(void **pctl, long long *values)
+int cuptie_control_read(void *ctl, long long *values)
 {
     return PAPI_ENOIMPL;
 }
 
-int cuptie_control_reset(void **pctl)
+int cuptie_control_reset(void *ctl)
 {
     return PAPI_ENOIMPL;
 }

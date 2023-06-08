@@ -335,7 +335,7 @@ static int cuda_update_control_state(hwd_control_state_t *ctl,
 
     // Validate the added names so far in a temporary context
     void *tmp_context;
-    papi_errno = cuptid_control_create(global_event_names, control->events_count, control->events_id, &tmp_context, &(control->thread_info));
+    papi_errno = cuptid_control_create(global_event_names, control->events_count, control->events_id, control->thread_info, &tmp_context);
     if (papi_errno != PAPI_OK) {
         cuptid_control_destroy(&tmp_context);
         goto fn_exit;
@@ -375,11 +375,11 @@ static int cuda_start(hwd_context_t __attribute__((unused)) *ctx, hwd_control_st
     for (i=0; i<control->events_count; i++) {
         control->values[i] = 0;
     }
-    papi_errno = cuptid_control_create(global_event_names, control->events_count, control->events_id, &(control->cupti_ctl), &(control->thread_info));
+    papi_errno = cuptid_control_create(global_event_names, control->events_count, control->events_id, control->thread_info, &(control->cupti_ctl));
     if (papi_errno != PAPI_OK)
         goto fn_exit;
 
-    papi_errno = cuptid_start( &(control->cupti_ctl), &(control->thread_info) );
+    papi_errno = cuptid_start( control->cupti_ctl, control->thread_info );
 
 fn_exit:
     LOCKDBG("Unlocking.\n");
@@ -395,7 +395,7 @@ int cuda_stop(hwd_context_t __attribute__((unused)) *ctx, hwd_control_state_t *c
     LOCKDBG("Locked.\n");
     cuda_ctl_t *control = (cuda_ctl_t *) ctl;
     int papi_errno;
-    papi_errno = cuptid_stop( &(control->cupti_ctl), &(control->thread_info) );
+    papi_errno = cuptid_stop( control->cupti_ctl, control->thread_info );
     if (papi_errno != PAPI_OK)
         goto fn_exit;
     papi_errno = cuptid_control_destroy( &(control->cupti_ctl) );
@@ -413,17 +413,17 @@ static int cuda_read(hwd_context_t __attribute__((unused)) *ctx, hwd_control_sta
     LOCKDBG("Locking.\n");
     _papi_hwi_lock(_cuda_lock);
     LOCKDBG("Locked.\n");
-    papi_errno = cuptid_stop( &(control->cupti_ctl), &(control->thread_info) );
+    papi_errno = cuptid_stop( control->cupti_ctl, control->thread_info );
     if (papi_errno != PAPI_OK)
         goto fn_exit;
     // First collect the values from the lower layer for last session
-    papi_errno = cuptid_control_read( &(control->cupti_ctl), (long long *) &(control->values) );
+    papi_errno = cuptid_control_read( control->cupti_ctl, (long long *) &(control->values) );
     if (papi_errno != PAPI_OK)
         goto fn_exit;
     // Then copy the values to the user array `val`
     *val = control->values;
 
-    papi_errno = cuptid_start( &(control->cupti_ctl), &(control->thread_info) );
+    papi_errno = cuptid_start( control->cupti_ctl, control->thread_info );
 
 fn_exit:
     LOCKDBG("Unlocking.\n");
@@ -438,5 +438,5 @@ static int cuda_reset(hwd_context_t __attribute__((unused)) *ctx, hwd_control_st
     for (i = 0; i < control->events_count; i++) {
         control->values[i] = 0;
     }
-    return cuptid_control_reset( &(control->cupti_ctl) );
+    return cuptid_control_reset( control->cupti_ctl );
 }
