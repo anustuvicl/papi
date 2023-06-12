@@ -31,6 +31,7 @@ typedef struct event_name_list_s {
 event_list_t *initialize_dynamic_event_list(void);
 event_list_t *initialize_dynamic_event_list_size(int size);
 int insert_event_record(event_list_t *evt_table, const char *evt_name, unsigned int evt_code, int evt_pos);
+event_list_t *select_by_idx(event_list_t *src, int count, int *idcs);
 int find_event_name(event_list_t *evt_table, const char *evt_name, event_rec_t **found_rec);
 void free_event_name_list(event_list_t **pevt_table);
 int tokenize_event_name(const char *name, char *nv_name, int *gpuid);

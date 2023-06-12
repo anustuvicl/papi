@@ -19,7 +19,7 @@ int cuptie_init(char **pdisabled_reason)
     return PAPI_ENOIMPL;
 }
 
-int cuptie_control_create(event_list_t *all_event_names, int event_count, int *evt_ids, void *thr_info, void **pctl)
+int cuptie_control_create(event_list_t *event_names, void *thr_info, void **pctl)
 {
     return PAPI_ENOIMPL;
 }

@@ -79,6 +79,24 @@ fn_exit:
     return errno;
 }
 
+event_list_t *select_by_idx(event_list_t *src, int count, int *idcs)
+{
+    if (count <= 0 || count > (int) src->count)
+        return NULL;
+    event_list_t *target = initialize_dynamic_event_list_size(count);
+    if (target == NULL)
+        goto fn_exit;
+    int i;
+    for (i = 0; i < count; i++) {
+        if (insert_event_record(target, src->evts[idcs[i]].name, src->evts[idcs[i]].evt_code, src->evts[idcs[i]].evt_pos) != PAPI_OK) {
+            free_event_name_list(&target);
+            goto fn_exit;
+        }
+    }
+fn_exit:
+    return target;
+}
+
 int find_event_name(event_list_t *evt_table, const char *evt_name, event_rec_t **found_rec)
 {
     int errno;

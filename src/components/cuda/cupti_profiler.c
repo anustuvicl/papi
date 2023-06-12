@@ -38,7 +38,7 @@ static int initialize_cupti_profiler_api(void);
 static int deinitialize_cupti_profiler_api(void);
 static int initialize_perfworks_api(void);
 static int get_chip_name(int dev_num, char* chipName);
-static int add_events_per_gpu(event_list_t *event_names, int event_count, int *evt_ids, cuptip_control_t *state);
+static int add_events_per_gpu(event_list_t *event_names, cuptip_control_t *state);
 static int retrieve_metric_details(NVPA_MetricsContext *pMetricsContext, const char *nv_name,
                                    char *description, int *numDep, NVPA_RawMetricRequest **pRMR);
 static int get_event_names_rmr(NVPA_MetricsContext* pMetricsContext, cuptip_gpu_control_t *gpu_ctl);
@@ -387,7 +387,7 @@ struct cuptip_control_s {
     enum running_e running;
 };
 
-static int add_events_per_gpu(event_list_t *event_names, int event_count, int *evt_ids, cuptip_control_t *state)
+static int add_events_per_gpu(event_list_t *event_names, cuptip_control_t *state)
 {
     COMPDBG("Entering.\n");
     int i, gpu_id, papi_errno = PAPI_OK;
@@ -399,8 +399,8 @@ static int add_events_per_gpu(event_list_t *event_names, int event_count, int *e
             goto fn_exit;
         }
     }
-    for (i = 0; i < event_count; i++) {
-        papi_errno = tokenize_event_name(event_names->evts[evt_ids[i]].name, (char*) &nvName, &gpu_id);
+    for (i = 0; i < (int) event_names->count; i++) {
+        papi_errno = tokenize_event_name(event_names->evts[i].name, (char*) &nvName, &gpu_id);
         if (papi_errno != PAPI_OK)
             goto fn_exit;
         if (gpu_id < 0 || gpu_id > num_gpus) {
@@ -408,12 +408,12 @@ static int add_events_per_gpu(event_list_t *event_names, int event_count, int *e
             goto fn_exit;
         }
         insert_event_record(state->gpu_ctl[gpu_id].event_names,
-                            event_names->evts[evt_ids[i]].name,
-                            event_names->evts[evt_ids[i]].evt_code,
+                            event_names->evts[i].name,
+                            event_names->evts[i].evt_code,
                             i);
         LOGDBG("Adding event gpu %d name %s with code %d at pos %d\n",
-            gpu_id, event_names->evts[evt_ids[i]].name,
-            event_names->evts[evt_ids[i]].evt_code, i);
+            gpu_id, event_names->evts[i].name,
+            event_names->evts[i].evt_code, i);
     }
 fn_exit:
     return papi_errno;
@@ -1321,7 +1321,7 @@ fn_fail:
     return PAPI_EMISC;
 }
 
-int cuptip_control_create(event_list_t *all_event_names, int event_count, int *evt_ids, void *thr_info, void **pctl)
+int cuptip_control_create(event_list_t *event_names, void *thr_info, void **pctl)
 {
     COMPDBG("Entering.\n");
     int papi_errno = PAPI_OK, gpu_id;
@@ -1366,7 +1366,7 @@ int cuptip_control_create(event_list_t *all_event_names, int event_count, int *e
     }
 
     // Update event names to be profiled for corresponding gpus
-    papi_errno = add_events_per_gpu(all_event_names, event_count, evt_ids, state);
+    papi_errno = add_events_per_gpu(event_names, state);
     if (papi_errno != PAPI_OK)
         goto fn_exit;
     // Validate initialized profiler state

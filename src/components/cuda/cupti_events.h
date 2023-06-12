@@ -10,7 +10,7 @@
 #include "lcuda_common.h"
 
 int cuptie_init(const char **pdisabled_reason);
-int cuptie_control_create(event_list_t *all_event_names, int event_count, int *evt_ids, void *thr_info, void **pctl);
+int cuptie_control_create(event_list_t *event_names, void *thr_info, void **pctl);
 int cuptie_control_destroy(void **pctl);
 int cuptie_control_start(void *ctl, void *thr_info);
 int cuptie_control_stop(void *ctl, void *thr_info);

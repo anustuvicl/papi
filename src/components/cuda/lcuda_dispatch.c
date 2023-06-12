@@ -87,18 +87,18 @@ int cuptid_thread_info_free(void **pthread_info)
     return cucontext_array_free(pthread_info);
 }
 
-int cuptid_control_create(event_list_t *event_names, int event_count, int *evt_ids, void *thread_info, void **pcupti_ctl)
+int cuptid_control_create(event_list_t *event_names, void *thread_info, void **pcupti_ctl)
 {
     if (util_runtime_is_perfworks_api()) {
 
 #if defined(API_PERFWORKS)
-        return cuptip_control_create(event_names, event_count, evt_ids, thread_info, pcupti_ctl);
+        return cuptip_control_create(event_names, thread_info, pcupti_ctl);
 #endif
 
     } else if (util_runtime_is_events_api()) {
 
 #if defined (API_EVENTS)
-        return cuptie_control_create(event_names, event_count, evt_ids, thread_info, pcupti_ctl);
+        return cuptie_control_create(event_names, thread_info, pcupti_ctl);
 #endif
 
     }

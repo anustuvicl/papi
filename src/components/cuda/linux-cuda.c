@@ -340,7 +340,12 @@ static int cuda_update_control_state(hwd_control_state_t *ctl,
 
     // Validate the added names so far in a temporary context
     void *tmp_context;
-    papi_errno = cuptid_control_create(global_event_names, control->events_count, control->events_id, control->thread_info, &tmp_context);
+    event_list_t *select_names = select_by_idx(global_event_names, control->events_count, control->events_id);
+    if (select_names == NULL) {
+        papi_errno = PAPI_ENOMEM;
+        goto fn_exit;
+    }
+    papi_errno = cuptid_control_create(select_names, control->thread_info, &tmp_context);
     if (papi_errno != PAPI_OK) {
         cuptid_control_destroy(&tmp_context);
         goto fn_exit;
@@ -348,6 +353,7 @@ static int cuda_update_control_state(hwd_control_state_t *ctl,
     papi_errno = cuptid_control_destroy(&tmp_context);
 
 fn_exit:
+    free_event_name_list(&select_names);
     LOCKDBG("Unlocking.\n");
     _papi_hwi_unlock(_cuda_lock);
     return papi_errno;
@@ -380,13 +386,19 @@ static int cuda_start(hwd_context_t __attribute__((unused)) *ctx, hwd_control_st
     for (i=0; i<control->events_count; i++) {
         control->values[i] = 0;
     }
-    papi_errno = cuptid_control_create(global_event_names, control->events_count, control->events_id, control->thread_info, &(control->cupti_ctl));
+    event_list_t *select_names = select_by_idx(global_event_names, control->events_count, control->events_id);
+    if (select_names == NULL) {
+        papi_errno = PAPI_ENOMEM;
+        goto fn_exit;
+    }
+    papi_errno = cuptid_control_create(select_names, control->thread_info, &(control->cupti_ctl));
     if (papi_errno != PAPI_OK)
         goto fn_exit;
 
     papi_errno = cuptid_start( control->cupti_ctl, control->thread_info );
 
 fn_exit:
+    free_event_name_list(&select_names);
     LOCKDBG("Unlocking.\n");
     _papi_hwi_unlock(_cuda_lock);
     return papi_errno;

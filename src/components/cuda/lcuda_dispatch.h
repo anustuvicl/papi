@@ -13,7 +13,7 @@ void cuptid_shutdown(void);
 int cuptid_init(const char **disabled_reason);
 int cuptid_thread_info_init(void **pthread_info);
 int cuptid_thread_info_free(void **pthread_info);
-int cuptid_control_create(event_list_t *event_names, int event_count, int *evt_ids, void *thread_info, void **pcupti_ctl);
+int cuptid_control_create(event_list_t *event_names, void *thread_info, void **pcupti_ctl);
 int cuptid_control_destroy(void **pcupti_ctl);
 int cuptid_start(void *cupti_ctl, void *thread_info);
 int cuptid_stop(void *cupti_ctl, void *thread_info);
