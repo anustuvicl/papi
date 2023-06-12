@@ -14,7 +14,7 @@
 #include <nvperf_cuda_host.h>
 #include <nvperf_target.h>
 
-#include "lcuda_utils.h"
+#include "cupti_common.h"
 #include "cupti_profiler.h"
 #include "lcuda_debug.h"
 
@@ -1127,13 +1127,11 @@ static int init_all_metrics(void)
     return PAPI_OK;
 }
 
-int cuptip_enumerate_all_metric_names(event_list_t *all_evt_names)
+int cuptip_event_enum(event_list_t *all_evt_names)
 {
     int gpu_id, i, found, listsubmetrics=1, papi_errno = PAPI_OK;
     if (avail_events[0].nv_metrics != NULL)  // Already eumerated for 1st device? Then exit...
         goto fn_exit;
-    STOPWATCH;
-    TICK;
     for (gpu_id=0; gpu_id<num_gpus; gpu_id++) {
         LOGDBG("Getting metric names for gpu %d\n", gpu_id);
         found = find_same_chipname(gpu_id);
@@ -1184,9 +1182,6 @@ int cuptip_enumerate_all_metric_names(event_list_t *all_evt_names)
         NVPW_CALL(NVPW_MetricsContext_GetMetricNames_EndPtr((NVPW_MetricsContext_GetMetricNames_End_Params *) &getMetricNameEndParams), return PAPI_EMISC);
 
     }
-    TOCK;
-    TIMEDBG("Time to get all metric names =");
-    TICK;
     char evt_name[PAPI_2MAX_STR_LEN];
     event_rec_t *find=NULL;
     int len;
@@ -1208,9 +1203,6 @@ int cuptip_enumerate_all_metric_names(event_list_t *all_evt_names)
             //    all_evt_names->evts[all_evt_names->count-1].name, avail_events[gpu_id].nv_metrics->evts[i].desc);
         }
     }
-    TOCK;
-    TIMEDBG("Time to transfer all metric names to component =");
-    LOGDBG("Total metric names for %d gpus = %d\n", num_gpus, all_evt_names->count);
 fn_exit:
     return papi_errno;
 }
@@ -1404,7 +1396,7 @@ int cuptip_control_destroy(void **pctl)
     return PAPI_OK;
 }
 
-int cuptip_start(void *ctl, void *thr_info)
+int cuptip_control_start(void *ctl, void *thr_info)
 {
     COMPDBG("Entering.\n");
     cuptip_control_t *state = (cuptip_control_t *) ctl;
@@ -1464,7 +1456,7 @@ fn_fail:
     goto fn_exit;
 }
 
-int cuptip_stop(void *ctl, void *thr_info)
+int cuptip_control_stop(void *ctl, void *thr_info)
 {
     COMPDBG("Entering.\n");
     cuptip_control_t *state = (cuptip_control_t *) ctl;
@@ -1480,6 +1472,7 @@ int cuptip_stop(void *ctl, void *thr_info)
     int papi_errno = PAPI_OK;
     if (state->running == False) {
         ERRDBG("Profiler is already stopped.\n");
+        papi_errno = PAPI_EINVAL;
         goto fn_fail;
     }
     for (gpu_id=0; gpu_id<num_gpus; gpu_id++) {
@@ -1501,7 +1494,6 @@ fn_exit:
     CUDA_CALL(cuCtxSetCurrentPtr(userCtx), return PAPI_EMISC);
     return papi_errno;
 fn_fail:
-    papi_errno = PAPI_ECMP;
     goto fn_exit;
 }
 

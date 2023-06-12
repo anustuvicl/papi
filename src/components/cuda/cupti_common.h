@@ -1,5 +1,5 @@
 /**
- * @file    lcuda_utils.h
+ * @file    cupti_common.h
  * @author  Anustuv Pal
  *          anustuv@icl.utk.edu
  */

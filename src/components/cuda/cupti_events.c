@@ -29,12 +29,12 @@ int cuptie_control_destroy(void **pctl)
     return PAPI_ENOIMPL;
 }
 
-int cuptie_start(void *ctl, void *thr_info)
+int cuptie_control_start(void *ctl, void *thr_info)
 {
     return PAPI_ENOIMPL;
 }
 
-int cuptie_stop(void *ctl, void *thr_info)
+int cuptie_control_stop(void *ctl, void *thr_info)
 {
     return PAPI_ENOIMPL;
 }
@@ -49,7 +49,7 @@ int cuptie_control_reset(void *ctl)
     return PAPI_ENOIMPL;
 }
 
-int cuptie_enumerate_all_metric_names(event_list_t *all_evt_names)
+int cuptie_event_enum(event_list_t *all_evt_names)
 {
     return PAPI_ENOIMPL;
 }

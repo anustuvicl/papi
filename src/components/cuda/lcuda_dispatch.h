@@ -19,6 +19,6 @@ int cuptid_start(void *cupti_ctl, void *thread_info);
 int cuptid_stop(void *cupti_ctl, void *thread_info);
 int cuptid_control_read(void *cupti_ctl, long long *values);
 int cuptid_control_reset(void *cupti_ctl);
-int cuptid_enumerate_all_events(event_list_t *all_evt_names);
+int cuptid_event_enum(event_list_t *all_evt_names);
 int cuptid_get_event_description(char *evt_name, char *descr);
 #endif // __LCUDA_DISPATCH_H__

@@ -1,5 +1,5 @@
 /**
- * @file    lcuda_utils.c
+ * @file    cupti_common.c
  * @author  Anustuv Pal
  *          anustuv@icl.utk.edu
  */
@@ -9,7 +9,7 @@
 #include "papi_memory.h"
 
 #include "lcuda_config.h"
-#include "lcuda_utils.h"
+#include "cupti_common.h"
 #include "lcuda_common.h"
 
 static void *dl_drv, *dl_rt;

@@ -5,7 +5,7 @@
  */
 
 #include "lcuda_config.h"
-#include "lcuda_utils.h"
+#include "cupti_common.h"
 #include "lcuda_dispatch.h"
 #include "lcuda_debug.h"
 
@@ -128,13 +128,13 @@ int cuptid_start(void *cupti_ctl, void *thread_info)
     if (util_runtime_is_perfworks_api()) {
 
 #if defined(API_PERFWORKS)
-        return cuptip_start(cupti_ctl, thread_info);
+        return cuptip_control_start(cupti_ctl, thread_info);
 #endif
 
     } else if (util_runtime_is_events_api()) {
 
 #if defined(API_EVENTS)
-        return cuptie_start(cupti_ctl, thread_info);
+        return cuptie_control_start(cupti_ctl, thread_info);
 #endif
 
     }
@@ -146,13 +146,13 @@ int cuptid_stop(void *cupti_ctl, void *thread_info)
     if (util_runtime_is_perfworks_api()) {
 
 #if defined(API_PERFWORKS)
-        return cuptip_stop(cupti_ctl, thread_info);
+        return cuptip_control_stop(cupti_ctl, thread_info);
 #endif
 
     } else if (util_runtime_is_events_api()) {
 
 #if defined(API_EVENTS)
-        return cuptie_stop(cupti_ctl, thread_info);
+        return cuptie_control_stop(cupti_ctl, thread_info);
 #endif
 
     }
@@ -195,18 +195,18 @@ int cuptid_control_reset(void *cupti_ctl)
     return PAPI_ECMP;
 }
 
-int cuptid_enumerate_all_events(event_list_t *all_evt_names)
+int cuptid_event_enum(event_list_t *all_evt_names)
 {
     if (util_runtime_is_perfworks_api()) {
 
 #if defined(API_PERFWORKS)
-        return cuptip_enumerate_all_metric_names(all_evt_names);
+        return cuptip_event_enum(all_evt_names);
 #endif
 
     } else if (util_runtime_is_events_api()) {
 
 #if defined(API_EVENTS)
-        return cuptie_enumerate_all_metric_names(all_evt_names);
+        return cuptie_event_enum(all_evt_names);
 #endif
 
     }

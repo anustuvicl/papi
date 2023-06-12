@@ -1,7 +1,12 @@
 /**
  * @file    linux-cuda.c
- * @author  Anustuv Pal
- *          anustuv@icl.utk.edu
+ *
+ * @author  Anustuv Pal   anustuv@icl.utk.edu (updated in 2023, redesigned with multi-threading support.)
+ * @author  Tony Castaldo tonycastaldo@icl.utk.edu (updated in 08/2019, to make counters accumulate.)
+ * @author  Tony Castaldo tonycastaldo@icl.utk.edu (updated in 2018, to use batch reads and support nvlink metrics.)
+ * @author  Asim YarKhan  yarkhan@icl.utk.edu (updated in 2017 to support CUDA metrics)
+ * @author  Asim YarKhan  yarkhan@icl.utk.edu (updated in 2015 for multiple CUDA contexts/devices)
+ * @author  Heike Jagode  jagode@icl.utk.edu (First version, in collaboration with Robert Dietrich, TU Dresden)
  *
  * @ingroup papi_components
  *
@@ -190,7 +195,7 @@ static int cuda_ntv_enum_events(unsigned int *event_code, int modifier)
 
     _papi_hwi_lock(COMPONENT_LOCK);
     LOCKDBG("Locked COMPONENT_LOCK to enumerate all events.\n");
-    papi_errno = cuptid_enumerate_all_events(global_event_names);
+    papi_errno = cuptid_event_enum(global_event_names);
     _papi_hwi_unlock(COMPONENT_LOCK);
     LOCKDBG("Unlocked COMPONENT_LOCK.\n");
     if (papi_errno != PAPI_OK)
@@ -261,7 +266,7 @@ static int cuda_ntv_code_to_descr(unsigned int event_code, char *descr, int __at
         goto fn_exit;
 
     _papi_hwi_lock(COMPONENT_LOCK);
-    papi_errno = cuptid_enumerate_all_events(global_event_names);
+    papi_errno = cuptid_event_enum(global_event_names);
     _papi_hwi_unlock(COMPONENT_LOCK);
     if (papi_errno != PAPI_OK)
         goto fn_exit;
