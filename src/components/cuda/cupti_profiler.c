@@ -1340,31 +1340,10 @@ int cuptip_control_create(event_list_t *event_names, void *thr_info, void **pctl
         state->gpu_ctl[gpu_id].gpu_id = gpu_id;
 
     // Register the user created cuda context for the current gpu if not already known
-    CUcontext *cu_ctx = (CUcontext *) thr_info;
-    CUcontext tempCtx;
-    papi_errno = cudaGetDevicePtr(&gpu_id);
-    if (papi_errno != cudaSuccess) {
-        return PAPI_EMISC;
+    papi_errno = cucontext_update_current(thr_info);
+    if (papi_errno != PAPI_OK) {
+        goto fn_exit;
     }
-    papi_errno = cuCtxGetCurrentPtr(&tempCtx);
-    if (papi_errno != CUDA_SUCCESS) {
-        return PAPI_EMISC;
-    }
-    if (cu_ctx[gpu_id] == NULL) {
-        if (tempCtx != NULL) {
-            LOGDBG("Registering device = %d with ctx = %p.\n", gpu_id, tempCtx);
-            CUDA_CALL(cuCtxGetCurrentPtr(&cu_ctx[gpu_id]), return PAPI_EMISC);
-        }
-        else {
-            CUDART_CALL(cudaFreePtr(NULL), return PAPI_EMISC);
-            CUDA_CALL(cuCtxGetCurrentPtr(&cu_ctx[gpu_id]), return PAPI_EMISC);
-            LOGDBG("Using primary device context %p for device %d.\n", cu_ctx[gpu_id], gpu_id);
-        }
-    }
-    else if (cu_ctx[gpu_id] != tempCtx) {  // If context has changed keep the first seen one but with warning
-        ERRDBG("Warning: cuda context for gpu %d has changed from %p to %p\n", gpu_id, cu_ctx[gpu_id], tempCtx);
-    }
-
     // Update event names to be profiled for corresponding gpus
     papi_errno = add_events_per_gpu(event_names, state);
     if (papi_errno != PAPI_OK)

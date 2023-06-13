@@ -394,7 +394,7 @@ fn_exit:
     return is_events_api;
 }
 
-int cucontext_array_init(void **pcuda_context)
+int cucontext_array_create(void **pcuda_context)
 {
     COMPDBG("Entering.\n");
     CUcontext *cuCtx = (CUcontext *) papi_calloc (get_device_count(), sizeof(CUcontext));
@@ -405,7 +405,37 @@ int cucontext_array_init(void **pcuda_context)
     return PAPI_OK;
 }
 
-int cucontext_array_free(void **pcuda_context)
+int cucontext_update_current(void *cuda_context)
+{
+    int papi_errno, gpu_id;
+    CUcontext *cu_ctx = (CUcontext *) cuda_context;
+    CUcontext tempCtx;
+    papi_errno = cudaGetDevicePtr(&gpu_id);
+    if (papi_errno != cudaSuccess) {
+        return PAPI_EMISC;
+    }
+    papi_errno = cuCtxGetCurrentPtr(&tempCtx);
+    if (papi_errno != CUDA_SUCCESS) {
+        return PAPI_EMISC;
+    }
+    if (cu_ctx[gpu_id] == NULL) {
+        if (tempCtx != NULL) {
+            LOGDBG("Registering device = %d with ctx = %p.\n", gpu_id, tempCtx);
+            CUDA_CALL(cuCtxGetCurrentPtr(&cu_ctx[gpu_id]), return PAPI_EMISC);
+        }
+        else {
+            CUDART_CALL(cudaFreePtr(NULL), return PAPI_EMISC);
+            CUDA_CALL(cuCtxGetCurrentPtr(&cu_ctx[gpu_id]), return PAPI_EMISC);
+            LOGDBG("Using primary device context %p for device %d.\n", cu_ctx[gpu_id], gpu_id);
+        }
+    }
+    else if (cu_ctx[gpu_id] != tempCtx) {  // If context has changed keep the first seen one but with warning
+        ERRDBG("Warning: cuda context for gpu %d has changed from %p to %p\n", gpu_id, cu_ctx[gpu_id], tempCtx);
+    }
+    return PAPI_OK;
+}
+
+int cucontext_array_destroy(void **pcuda_context)
 {
     papi_free(*pcuda_context);
     *pcuda_context = NULL;

@@ -321,7 +321,7 @@ static int cuda_update_control_state(hwd_control_state_t *ctl,
     _papi_hwi_lock(_cuda_lock);
     LOCKDBG("Locked.\n");
     if (control->thread_info == NULL) {
-        papi_errno = cuptid_thread_info_init(&(control->thread_info));
+        papi_errno = cuptid_thread_info_create(&(control->thread_info));
         if (papi_errno != PAPI_OK)
             goto fn_exit;
     }
@@ -367,7 +367,7 @@ static int cuda_cleanup_eventset(hwd_control_state_t *ctl)
     if (control->cupti_ctl)
         papi_errno += cuptid_control_destroy(&(control->cupti_ctl));
     if (control->thread_info)
-        papi_errno += cuptid_thread_info_free(&(control->thread_info));
+        papi_errno += cuptid_thread_info_destroy(&(control->thread_info));
     if (papi_errno != PAPI_OK)
         return PAPI_ECMP;
     return PAPI_OK;

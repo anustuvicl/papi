@@ -77,14 +77,14 @@ fn_exit:
     return papi_errno;
 }
 
-int cuptid_thread_info_init(void **pthread_info)
+int cuptid_thread_info_create(void **pthread_info)
 {
-    return cucontext_array_init(pthread_info);
+    return cucontext_array_create(pthread_info);
 }
 
-int cuptid_thread_info_free(void **pthread_info)
+int cuptid_thread_info_destroy(void **pthread_info)
 {
-    return cucontext_array_free(pthread_info);
+    return cucontext_array_destroy(pthread_info);
 }
 
 int cuptid_control_create(event_list_t *event_names, void *thread_info, void **pcupti_ctl)

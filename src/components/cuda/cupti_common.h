@@ -92,7 +92,8 @@ enum gpu_collection_e util_gpu_collection_kind(void);
 int util_runtime_is_perfworks_api(void);
 int util_runtime_is_events_api(void);
 
-int cucontext_array_init(void **pcuda_context);
-int cucontext_array_free(void **pcuda_context);
+int cucontext_array_create(void **pcuda_context);
+int cucontext_update_current(void *cuda_context);
+int cucontext_array_destroy(void **pcuda_context);
 
 #endif /* __CUDA_UTILS_H__ */
