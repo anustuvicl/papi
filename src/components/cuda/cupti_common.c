@@ -242,14 +242,13 @@ static int unload_cupti_common_sym(void)
     return PAPI_OK;
 }
 
-int util_load_cuda_sym(const char **pdisabled_reason)
+static int util_load_cuda_sym(void)
 {
     int papi_errno;
     papi_errno = load_cuda_sym();
     papi_errno += load_cudart_sym();
     papi_errno += load_cupti_common_sym();
     if (papi_errno != PAPI_OK) {
-        *pdisabled_reason = "Unable to load CUDA library functions.";
         return PAPI_ESYS;
     }
     else
@@ -302,7 +301,9 @@ static int get_gpu_compute_capability(int dev_num)
     return cc;
 }
 
-enum gpu_collection_e util_gpu_collection_kind(void)
+enum gpu_collection_e {GPU_COLLECTION_UNKNOWN, GPU_COLLECTION_ALL_PERF, GPU_COLLECTION_MIXED, GPU_COLLECTION_ALL_EVENTS, GPU_COLLECTION_ALL_CC70};
+
+static enum gpu_collection_e util_gpu_collection_kind(void)
 {
     static enum gpu_collection_e kind = GPU_COLLECTION_UNKNOWN;
     if (kind != GPU_COLLECTION_UNKNOWN)
@@ -339,6 +340,23 @@ enum gpu_collection_e util_gpu_collection_kind(void)
 
 fn_exit:
     return kind;
+}
+
+int cupti_common_init(const char **pdisabled_reason)
+{
+    int papi_errno = util_load_cuda_sym();
+    if (papi_errno != PAPI_OK) {
+        *pdisabled_reason = "Unable to load CUDA library functions.";
+        goto fn_exit;
+    }
+
+    if (util_gpu_collection_kind() == GPU_COLLECTION_MIXED) {
+        *pdisabled_reason = "No support for systems with mixed compute capabilities, such as CC < 7.0 and CC > 7.0 GPUS.";
+        papi_errno = PAPI_ECMP;
+        goto fn_exit;
+    }
+fn_exit:
+    return papi_errno;
 }
 
 int util_runtime_is_perfworks_api(void)

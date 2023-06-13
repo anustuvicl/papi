@@ -39,14 +39,8 @@ void cuptid_shutdown(void)
 int cuptid_init(const char **pdisabled_reason)
 {
     int papi_errno;
-    papi_errno = util_load_cuda_sym(pdisabled_reason);
+    papi_errno = cupti_common_init(pdisabled_reason);
     if (papi_errno != PAPI_OK) {
-        goto fn_exit;
-    }
-
-    if (util_gpu_collection_kind() == GPU_COLLECTION_MIXED) {
-        *pdisabled_reason = "No support for systems with mixed compute capabilities, such as CC < 7.0 and CC > 7.0 GPUS.";
-        papi_errno = PAPI_ECMP;
         goto fn_exit;
     }
 

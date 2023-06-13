@@ -82,13 +82,9 @@ extern CUptiResult ( *cuptiGetVersionPtr ) (uint32_t* );
         }  \
     } while (0);
 
-int util_load_cuda_sym(const char **pdisabled_reason);
 int util_unload_cuda_sym(void);
-
-enum gpu_collection_e {GPU_COLLECTION_UNKNOWN, GPU_COLLECTION_ALL_PERF, GPU_COLLECTION_MIXED, GPU_COLLECTION_ALL_EVENTS, GPU_COLLECTION_ALL_CC70};
-
 int get_device_count(void);
-enum gpu_collection_e util_gpu_collection_kind(void);
+int cupti_common_init(const char **pdisabled_reason);
 int util_runtime_is_perfworks_api(void);
 int util_runtime_is_events_api(void);
 
