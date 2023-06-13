@@ -8,19 +8,19 @@
 #include "papi_memory.h"
 
 #include "lcuda_common.h"
-#include "lcuda_htable.h"
+#include "htable.h"
 #include "lcuda_debug.h"
 
 #define ADDED_EVENTS_INITIAL_CAPACITY 64
 
-event_list_t *initialize_dynamic_event_list_size(int size)
+ntv_event_table_t *initialize_dynamic_event_list_size(int size)
 {
-    event_list_t *evt_table = (event_list_t *) papi_malloc(sizeof(event_list_t));
+    ntv_event_table_t *evt_table = (ntv_event_table_t *) papi_malloc(sizeof(ntv_event_table_t));
     if (evt_table == NULL)
         goto fn_exit;
     evt_table->capacity = size;
     evt_table->count = 0;
-    evt_table->evts = (event_rec_t *) papi_calloc (evt_table->capacity, sizeof(event_rec_t));
+    evt_table->evts = (ntv_event_t *) papi_calloc (evt_table->capacity, sizeof(ntv_event_t));
     if (evt_table->evts == NULL) {
         free_event_name_list(&evt_table);
         ERRDBG("Error allocating memory for dynamic event table.\n");
@@ -33,15 +33,15 @@ fn_exit:
     return evt_table;
 }
 
-event_list_t *initialize_dynamic_event_list(void)
+ntv_event_table_t *initialize_dynamic_event_list(void)
 {
     return initialize_dynamic_event_list_size(ADDED_EVENTS_INITIAL_CAPACITY);
 }
 
-static int reallocate_array(event_list_t *evt_table)
+static int reallocate_array(ntv_event_table_t *evt_table)
 {
     evt_table->capacity *= 2;
-    evt_table->evts = (event_rec_t *) papi_realloc(evt_table->evts, evt_table->capacity * sizeof(event_rec_t));
+    evt_table->evts = (ntv_event_t *) papi_realloc(evt_table->evts, evt_table->capacity * sizeof(ntv_event_t));
     if (evt_table == NULL) {
         ERRDBG("Failed to expand event_table array.\n");
         return PAPI_ENOMEM;
@@ -55,7 +55,7 @@ static int reallocate_array(event_list_t *evt_table)
     return PAPI_OK;
 }
 
-int insert_event_record(event_list_t *evt_table, const char *evt_name, unsigned int evt_code, int evt_pos)
+int insert_event_record(ntv_event_table_t *evt_table, const char *evt_name, unsigned int evt_code, int evt_pos)
 {
     int errno = PAPI_OK;
 
@@ -79,11 +79,11 @@ fn_exit:
     return errno;
 }
 
-event_list_t *select_by_idx(event_list_t *src, int count, int *idcs)
+ntv_event_table_t *select_by_idx(ntv_event_table_t *src, int count, int *idcs)
 {
     if (count <= 0 || count > (int) src->count)
         return NULL;
-    event_list_t *target = initialize_dynamic_event_list_size(count);
+    ntv_event_table_t *target = initialize_dynamic_event_list_size(count);
     if (target == NULL)
         goto fn_exit;
     int i;
@@ -97,11 +97,11 @@ fn_exit:
     return target;
 }
 
-int find_event_name(event_list_t *evt_table, const char *evt_name, event_rec_t **found_rec)
+int find_event_name(ntv_event_table_t *evt_table, const char *evt_name, ntv_event_t **found_rec)
 {
     int errno;
 
-    event_rec_t *evt_rec = NULL;
+    ntv_event_t *evt_rec = NULL;
     errno = htable_find(evt_table->htable, evt_name, (void **) &evt_rec);
     if (errno == HTABLE_SUCCESS) {
         *found_rec = evt_rec;
@@ -110,9 +110,9 @@ int find_event_name(event_list_t *evt_table, const char *evt_name, event_rec_t *
     return PAPI_ENOEVNT;
 }
 
-void free_event_name_list(event_list_t **pevt_table)
+void free_event_name_list(ntv_event_table_t **pevt_table)
 {
-    event_list_t *evt_table = *pevt_table;
+    ntv_event_table_t *evt_table = *pevt_table;
     if (evt_table == NULL)
         return;
     if (evt_table->evts) {
@@ -156,7 +156,7 @@ int tokenize_event_name(const char *name, char *nv_name, int *gpuid)
 // Functions based on bitmasking to detect gpu exclusivity
 static gpu_occupancy_t global_gpu_bitmask;
 
-static int _devmask_events_get(event_list_t *evt_table, gpu_occupancy_t *bitmask)
+static int _devmask_events_get(ntv_event_table_t *evt_table, gpu_occupancy_t *bitmask)
 {
     int errno = PAPI_OK, gpu_id;
     long i;
@@ -173,7 +173,7 @@ fn_exit:
     return errno;
 }
 
-int devmask_check_and_acquire(event_list_t *evt_table)
+int devmask_check_and_acquire(ntv_event_table_t *evt_table)
 {
     gpu_occupancy_t bitmask;
     int errno = _devmask_events_get(evt_table, &bitmask);
@@ -186,7 +186,7 @@ int devmask_check_and_acquire(event_list_t *evt_table)
     return PAPI_OK;
 }
 
-int devmask_release(event_list_t *evt_table)
+int devmask_release(ntv_event_table_t *evt_table)
 {
     gpu_occupancy_t bitmask;
     int errno = _devmask_events_get(evt_table, &bitmask);

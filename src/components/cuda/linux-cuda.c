@@ -3,10 +3,10 @@
  *
  * @author  Anustuv Pal   anustuv@icl.utk.edu (updated in 2023, redesigned with multi-threading support.)
  * @author  Tony Castaldo tonycastaldo@icl.utk.edu (updated in 08/2019, to make counters accumulate.)
- * @author  Tony Castaldo tonycastaldo@icl.utk.edu (updated in 2018, to use batch reads and support nvlink metrics.)
- * @author  Asim YarKhan  yarkhan@icl.utk.edu (updated in 2017 to support CUDA metrics)
- * @author  Asim YarKhan  yarkhan@icl.utk.edu (updated in 2015 for multiple CUDA contexts/devices)
- * @author  Heike Jagode  jagode@icl.utk.edu (First version, in collaboration with Robert Dietrich, TU Dresden)
+ * @author  Tony Castaldo tonycastaldo@icl.utk.edu (updated in 2018, to use batch reads and support nvlink metrics.
+ * @author  Asim YarKhan yarkhan@icl.utk.edu (updated in 2017 to support CUDA metrics)
+ * @author  Asim YarKhan yarkhan@icl.utk.edu (updated in 2015 for multiple CUDA contexts/devices)
+ * @author  Heike Jagode (First version, in collaboration with Robert Dietrich, TU Dresden) jagode@icl.utk.edu
  *
  * @ingroup papi_components
  *
@@ -25,14 +25,14 @@
 #include <string.h>
 
 #include "lcuda_common.h"
-#include "lcuda_dispatch.h"
+#include "cupti_dispatch.h"
 #include "lcuda_debug.h"
 
 papi_vector_t _cuda_vector;
 
 unsigned _cuda_lock;
 
-event_list_t *global_event_names;
+ntv_event_table_t *global_event_names;
 
 static int cuda_init_component(int cidx);
 static int cuda_shutdown_component(void);
@@ -229,7 +229,7 @@ static int cuda_ntv_name_to_code(const char *name, unsigned int *event_code)
     int papi_errno = check_n_initialize();
     if (papi_errno != PAPI_OK)
         goto fn_exit;
-    event_rec_t *evt_rec;
+    ntv_event_t *evt_rec;
     papi_errno = find_event_name(global_event_names, name, &evt_rec);
     if (papi_errno == PAPI_OK) {
         *event_code = evt_rec->evt_code;
@@ -340,7 +340,7 @@ static int cuda_update_control_state(hwd_control_state_t *ctl,
 
     // Validate the added names so far in a temporary context
     void *tmp_context;
-    event_list_t *select_names = select_by_idx(global_event_names, control->events_count, control->events_id);
+    ntv_event_table_t *select_names = select_by_idx(global_event_names, control->events_count, control->events_id);
     if (select_names == NULL) {
         papi_errno = PAPI_ENOMEM;
         goto fn_exit;
@@ -386,7 +386,7 @@ static int cuda_start(hwd_context_t __attribute__((unused)) *ctx, hwd_control_st
     for (i=0; i<control->events_count; i++) {
         control->values[i] = 0;
     }
-    event_list_t *select_names = select_by_idx(global_event_names, control->events_count, control->events_id);
+    ntv_event_table_t *select_names = select_by_idx(global_event_names, control->events_count, control->events_id);
     if (select_names == NULL) {
         papi_errno = PAPI_ENOMEM;
         goto fn_exit;

@@ -10,14 +10,17 @@
 #include <cupti.h>
 
 #define CUPTI_PROFILER_API_MIN_SUPPORTED_VERSION  (13)
-// #define CUPTI_EVENTS_API_MAX_SUPPORTED_VERSION (xx)  // TODO: Set to last version when CUPTI events API removed
 
 #if CUPTI_API_VERSION >= CUPTI_PROFILER_API_MIN_SUPPORTED_VERSION
 #   define API_PERFWORKS 1
 #endif
 
-// #   if CUPTI_API_VERSION <= CUPTI_EVENTS_API_MAX_SUPPORTED_VERSION
+/*
+ * TODO: When NVIDIA removes the event API #define CUPTI_EVENTS_API_MAX_SUPPORTED_VERSION
+ * and set it to last version that supports it.
+ * Then conditionally define the following macro if the version lies within this range.
+ * Note: Introduce a runtime check in `util_runtime_is_events_api()` to satisfy this.
+ */
 #define API_EVENTS 1
-// #   endif
 
 #endif  // __LCUDA_CONFIG_H__

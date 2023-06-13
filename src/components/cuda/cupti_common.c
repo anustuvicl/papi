@@ -74,7 +74,7 @@ static int load_cuda_sym(void)
     LOGDBG("CUDA driver library loaded from %s\n", info.dli_fname);
     return PAPI_OK;
 fn_fail:
-    return PAPI_ESYS;
+    return PAPI_EMISC;
 }
 
 static int unload_cuda_sym(void)
@@ -158,7 +158,7 @@ static int load_cudart_sym(void)
     LOGDBG("CUDA runtime library loaded from %s\n", info.dli_fname);
     return PAPI_OK;
 fn_fail:
-    return PAPI_ESYS;
+    return PAPI_EMISC;
 }
 
 static int unload_cudart_sym(void)
@@ -229,7 +229,7 @@ static int load_cupti_common_sym(void)
     LOGDBG("CUPTI library loaded from %s\n", info.dli_fname);
     return PAPI_OK;
 fn_fail:
-    return PAPI_ESYS;
+    return PAPI_EMISC;
 }
 
 static int unload_cupti_common_sym(void)
@@ -249,7 +249,7 @@ static int util_load_cuda_sym(void)
     papi_errno += load_cudart_sym();
     papi_errno += load_cupti_common_sym();
     if (papi_errno != PAPI_OK) {
-        return PAPI_ESYS;
+        return PAPI_EMISC;
     }
     else
         return PAPI_OK;
@@ -400,8 +400,11 @@ int util_runtime_is_events_api(void)
 
     enum gpu_collection_e gpus_kind = util_gpu_collection_kind();
 
+    /*
+     * See lcuda_config.h: When NVIDIA removes the events API add a check in the following condition
+     * to check the `util_dylib_cupti_version()` is also <= CUPTI_EVENTS_API_MAX_SUPPORTED_VERSION.
+     */
     if ((gpus_kind == GPU_COLLECTION_ALL_EVENTS || gpus_kind == GPU_COLLECTION_ALL_CC70)) {
-        // TODO: && util_dylib_cupti_version() <= CUPTI_EVENTS_API_MAX_SUPPORTED_VERSION)
         is_events_api = 1;
         goto fn_exit;
     } else {

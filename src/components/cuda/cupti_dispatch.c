@@ -1,12 +1,12 @@
 /**
- * @file    lcuda_dispatch.c
+ * @file    cupti_dispatch.c
  * @author  Anustuv Pal
  *          anustuv@icl.utk.edu
  */
 
 #include "lcuda_config.h"
 #include "cupti_common.h"
-#include "lcuda_dispatch.h"
+#include "cupti_dispatch.h"
 #include "lcuda_debug.h"
 
 #if defined(API_PERFWORKS)
@@ -81,7 +81,7 @@ int cuptid_thread_info_destroy(void **pthread_info)
     return cucontext_array_destroy(pthread_info);
 }
 
-int cuptid_control_create(event_list_t *event_names, void *thread_info, void **pcupti_ctl)
+int cuptid_control_create(ntv_event_table_t *event_names, void *thread_info, void **pcupti_ctl)
 {
     if (util_runtime_is_perfworks_api()) {
 
@@ -189,7 +189,7 @@ int cuptid_control_reset(void *cupti_ctl)
     return PAPI_ECMP;
 }
 
-int cuptid_event_enum(event_list_t *all_evt_names)
+int cuptid_event_enum(ntv_event_table_t *all_evt_names)
 {
     if (util_runtime_is_perfworks_api()) {
 

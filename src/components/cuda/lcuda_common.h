@@ -9,7 +9,7 @@
 
 #include <papi.h>
 
-typedef struct eventname_id_s {
+typedef struct event_record_s {
     char name[PAPI_2MAX_STR_LEN];
     char desc[PAPI_2MAX_STR_LEN];
     int gpu_id;
@@ -18,29 +18,29 @@ typedef struct eventname_id_s {
     int num_dep;
     double value;
     void *info;  // API specific details
-} event_rec_t;
+} ntv_event_t;
 
-typedef struct event_name_list_s {
-    event_rec_t *evts;
+typedef struct event_table_s {
+    ntv_event_t *evts;
     unsigned int count;
     unsigned int capacity;
     void *htable;
-} event_list_t;
+} ntv_event_table_t;
 
 // These functions form a simple API to handle dynamic list of strings
-event_list_t *initialize_dynamic_event_list(void);
-event_list_t *initialize_dynamic_event_list_size(int size);
-int insert_event_record(event_list_t *evt_table, const char *evt_name, unsigned int evt_code, int evt_pos);
-event_list_t *select_by_idx(event_list_t *src, int count, int *idcs);
-int find_event_name(event_list_t *evt_table, const char *evt_name, event_rec_t **found_rec);
-void free_event_name_list(event_list_t **pevt_table);
+ntv_event_table_t *initialize_dynamic_event_list(void);
+ntv_event_table_t *initialize_dynamic_event_list_size(int size);
+int insert_event_record(ntv_event_table_t *evt_table, const char *evt_name, unsigned int evt_code, int evt_pos);
+ntv_event_table_t *select_by_idx(ntv_event_table_t *src, int count, int *idcs);
+int find_event_name(ntv_event_table_t *evt_table, const char *evt_name, ntv_event_t **found_rec);
+void free_event_name_list(ntv_event_table_t **pevt_table);
 int tokenize_event_name(const char *name, char *nv_name, int *gpuid);
 
 // Functions to track the occupancy of gpu counters in event sets
 typedef int64_t gpu_occupancy_t;
 
-int devmask_check_and_acquire(event_list_t *evt_table);
-int devmask_release(event_list_t *evt_table);
+int devmask_check_and_acquire(ntv_event_table_t *evt_table);
+int devmask_release(ntv_event_table_t *evt_table);
 
 // Utility to locate a file in a given path
 #define MAX_FILES 100

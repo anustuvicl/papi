@@ -19,7 +19,7 @@ int cuptie_init(char **pdisabled_reason)
     return PAPI_ENOIMPL;
 }
 
-int cuptie_control_create(event_list_t *event_names, void *thr_info, void **pctl)
+int cuptie_control_create(ntv_event_table_t *event_names, void *thr_info, void **pctl)
 {
     return PAPI_ENOIMPL;
 }
@@ -49,7 +49,7 @@ int cuptie_control_reset(void *ctl)
     return PAPI_ENOIMPL;
 }
 
-int cuptie_event_enum(event_list_t *all_evt_names)
+int cuptie_event_enum(ntv_event_table_t *all_evt_names)
 {
     return PAPI_ENOIMPL;
 }
