@@ -108,3 +108,21 @@ The CUDA component can profile using contexts created by `cuCtxCreate` or primar
 
 ## CUDA toolkit versions
 Once your binaries are compiled, it is possible to swap the CUDA toolkit versions without needing to recompile the source. Simply update `PAPI_CUDA_ROOT` to point to the path where the cuda toolkit version can be found. You might need to update `LD_LIBRARY_PATH` as well.
+
+## Custom Library paths
+PAPI CUDA component loads the CUDA driver library from the system installed path. It loads the other libraries from `$PAPI_CUDA_ROOT`. If that is not set, then it tries to load them from system paths.
+
+However, it is possible to load each of these libraries from custom paths by setting each of the following environment variables to point to the desired files. These are,
+
+- `PAPI_CUDA_RUNTIME` to point to `libcudart.so`
+- `PAPI_CUDA_CUPTI` to point to `libcupti.so`
+- `PAPI_CUDA_PERFWORKS` to point to `libnvperf_host.so`
+
+## Compute capability 7.0 with CUDA toolkit version 11.0
+NVIDIA GPUs with compute capability 7.0 support profiling on both PerfWorks API and the older Events & Metrics API.
+
+If CUDA toolkit version > 11.0 is used, then PAPI uses the newer API, but using toolkit version 11.0, PAPI uses the events API by default.
+
+If the environment variable `PAPI_CUDA_110_CC_70_PERFWORKS_API` is set to any non-empty value, then compute capability 7.0 using toolkit version 11.0 will use the Perfworks API. Eg:
+
+    `export PAPI_CUDA_110_CC_70_PERFWORKS_API=1`

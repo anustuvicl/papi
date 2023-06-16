@@ -107,15 +107,21 @@ static int load_cudart_sym(void)
     char dlname[] = "libcudart.so";
     int count, i;
     char *found_files[MAX_FILES];
-    char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
-
     char lookup_path[PATH_MAX];
+
+    char *papi_cuda_runtime = getenv("PAPI_CUDA_RUNTIME");
+    if (papi_cuda_runtime) {
+        sprintf(lookup_path, "%s/%s", papi_cuda_runtime, dlname);
+        dl_rt = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
+    }
+
+    char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
     const char *standard_paths[] = {
         "%s/lib64/%s",
     };
     int num_standard_paths = sizeof(standard_paths) / sizeof(standard_paths[0]);
 
-    if (papi_cuda_root) {
+    if (papi_cuda_root && !dl_rt) {
 
         for (i = 0; i < num_standard_paths; i++) {
             sprintf(lookup_path, standard_paths[i], papi_cuda_root, dlname);
@@ -183,16 +189,22 @@ static int load_cupti_common_sym(void)
     char dlname[] = "libcupti.so";
     int count, i;
     char *found_files[MAX_FILES];
-    char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
-
     char lookup_path[PATH_MAX];
+
+    char *papi_cuda_cupti = getenv("PAPI_CUDA_CUPTI");
+    if (papi_cuda_cupti) {
+        sprintf(lookup_path, "%s/%s", papi_cuda_cupti, dlname);
+        dl_cupti = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
+    }
+
+    char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
     const char *standard_paths[] = {
         "%s/extras/CUPTI/lib64/%s",
         "%s/lib64/%s",
     };
     int num_standard_paths = sizeof(standard_paths) / sizeof(standard_paths[0]);
 
-    if (papi_cuda_root) {
+    if (papi_cuda_root && !dl_cupti) {
 
         for (i = 0; i < num_standard_paths; i++) {
             sprintf(lookup_path, standard_paths[i], papi_cuda_root, dlname);
@@ -364,6 +376,7 @@ int util_runtime_is_perfworks_api(void)
     static int is_perfworks_api = -1;
     if (is_perfworks_api != -1)
         goto fn_exit;
+    char *papi_cuda_110_cc70_perfworks_api = getenv("PAPI_CUDA_110_CC_70_PERFWORKS_API");
 
     enum gpu_collection_e gpus_kind = util_gpu_collection_kind();
     unsigned int cuptiVersion = util_dylib_cupti_version();
@@ -371,13 +384,14 @@ int util_runtime_is_perfworks_api(void)
     if (gpus_kind == GPU_COLLECTION_ALL_CC70 && 
         (cuptiVersion == CUPTI_PROFILER_API_MIN_SUPPORTED_VERSION || util_dylib_cu_runtime_version() == 11000))
     {
-#if defined(PAPI_CUDA_110_CC_70_PERFWORKS_API)
-        is_perfworks_api = 1;
-        goto fn_exit;
-#else
-        is_perfworks_api = 0;
-        goto fn_exit;
-#endif
+        if (papi_cuda_110_cc70_perfworks_api != NULL) {
+            is_perfworks_api = 1;
+            goto fn_exit;
+        }
+        else {
+            is_perfworks_api = 0;
+            goto fn_exit;
+        }
     }
 
     if ((gpus_kind == GPU_COLLECTION_ALL_PERF || gpus_kind == GPU_COLLECTION_ALL_CC70) && cuptiVersion >= CUPTI_PROFILER_API_MIN_SUPPORTED_VERSION) {

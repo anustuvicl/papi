@@ -194,16 +194,22 @@ static int load_nvpw_sym(void)
     char dlname[] = "libnvperf_host.so";
     char *found_files[MAX_FILES];
     int count, i;
-    char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
-
     char lookup_path[PATH_MAX];
+
+    char *papi_cuda_perfworks = getenv("PAPI_CUDA_PERFWORKS");
+    if (papi_cuda_perfworks) {
+        sprintf(lookup_path, "%s/%s", papi_cuda_perfworks, dlname);
+        dl_nvpw = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
+    }
+
+    char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
     const char *standard_paths[] = {
         "%s/extras/CUPTI/lib64/%s",
         "%s/lib64/%s",
     };
     int num_standard_paths = sizeof(standard_paths) / sizeof(standard_paths[0]);
 
-    if (papi_cuda_root) {
+    if (papi_cuda_root && !dl_nvpw) {
 
         for (i = 0; i < num_standard_paths; i++) {
             sprintf(lookup_path, standard_paths[i], papi_cuda_root, dlname);
