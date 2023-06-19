@@ -13,6 +13,7 @@
 
 #include "lcuda_debug.h"
 
+const char *linked_cudart_path;
 extern void *dl_cupti;
 
 // cuda driver function pointers

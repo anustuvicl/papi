@@ -5,6 +5,9 @@
  */
 
 #include <dlfcn.h>
+#include <link.h>
+#include <libgen.h>
+
 #include <papi.h>
 #include "papi_memory.h"
 
@@ -144,6 +147,10 @@ static int load_cudart_sym(void)
         NULL,
     };
 
+    if (linked_cudart_path && !dl_rt) {
+        dl_rt = load_dynamic_syms(linked_cudart_path, dlname, standard_paths);
+    }
+
     char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
     if (papi_cuda_root && !dl_rt) {
         dl_rt = load_dynamic_syms(papi_cuda_root, dlname, standard_paths);
@@ -208,6 +215,10 @@ static int load_cupti_common_sym(void)
         NULL,
     };
 
+    if (linked_cudart_path && !dl_cupti) {
+        dl_cupti = load_dynamic_syms(linked_cudart_path, dlname, standard_paths);
+    }
+
     char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
     if (papi_cuda_root && !dl_cupti) {
         dl_cupti = load_dynamic_syms(papi_cuda_root, dlname, standard_paths);
@@ -259,6 +270,10 @@ int util_unload_cuda_sym(void)
     unload_cuda_sym();
     unload_cudart_sym();
     unload_cupti_common_sym();
+    if (linked_cudart_path) {
+        papi_free(linked_cudart_path);
+        linked_cudart_path = NULL;
+    }
     return PAPI_OK;
 }
 
@@ -341,8 +356,28 @@ fn_exit:
     return kind;
 }
 
+static int callback_libcudart(struct dl_phdr_info *info, __attribute__((unused)) size_t size, __attribute__((unused)) void *data)
+{
+    const char *library_name = "libcudart.so";
+    const char *library_path = info->dlpi_name;
+
+    if (library_path != NULL && strstr(library_path, library_name) != NULL) {
+        linked_cudart_path = strdup(dirname(dirname((char *) library_path)));
+    }
+
+    return 0;
+}
+
 int cupti_common_init(const char **pdisabled_reason)
 {
+    dl_iterate_phdr(callback_libcudart, NULL);
+    if (linked_cudart_path != NULL) {
+        LOGDBG("Linked cudart root: %s\n", linked_cudart_path);
+    }
+    else {
+        LOGDBG("Target application not linked with cuda runtime libraries.\n");
+    }
+
     int papi_errno = util_load_cuda_sym();
     if (papi_errno != PAPI_OK) {
         *pdisabled_reason = "Unable to load CUDA library functions.";

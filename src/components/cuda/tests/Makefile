@@ -25,6 +25,7 @@ NVCFLAGS += -g -ccbin='$(CC)' $(PAPI_FLAG)
 INCLUDE += -I$(PAPI_CUDA_ROOT)/include
 CUDALIBS = -L$(PAPI_CUDA_ROOT)/lib64 -lcudart -lcuda
 PAPILIB += -L../../../libpfm4/lib -lpfm
+# NVCFLAGS += -Xlinker "-rpath,$(PAPI_CUDA_ROOT)/lib64"  # Uncomment to compile with cuda runtime lib in rpath
 
 cuda_tests: $(TESTS) $(TESTS_NOCTX)
 
