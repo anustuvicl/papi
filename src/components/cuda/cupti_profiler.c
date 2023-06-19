@@ -192,8 +192,6 @@ static int load_nvpw_sym(void)
 {
     COMPDBG("Entering.\n");
     char dlname[] = "libnvperf_host.so";
-    char *found_files[MAX_FILES];
-    int count, i;
     char lookup_path[PATH_MAX];
 
     char *papi_cuda_perfworks = getenv("PAPI_CUDA_PERFWORKS");
@@ -202,33 +200,15 @@ static int load_nvpw_sym(void)
         dl_nvpw = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
     }
 
-    char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
     const char *standard_paths[] = {
         "%s/extras/CUPTI/lib64/%s",
         "%s/lib64/%s",
+        NULL,
     };
-    int num_standard_paths = sizeof(standard_paths) / sizeof(standard_paths[0]);
 
+    char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
     if (papi_cuda_root && !dl_nvpw) {
-
-        for (i = 0; i < num_standard_paths; i++) {
-            sprintf(lookup_path, standard_paths[i], papi_cuda_root, dlname);
-            dl_nvpw = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
-            if (dl_nvpw) break;
-        }
-
-        if (!dl_nvpw) {
-            count = search_files_in_path(dlname, papi_cuda_root, found_files);
-            for (i = 0; i < count; i++) {
-                dl_nvpw = dlopen(found_files[i], RTLD_NOW | RTLD_GLOBAL);
-                if (dl_nvpw) {
-                    break;
-                }
-            }
-            for (i = 0; i < count; i++) {
-                papi_free(found_files[i]);
-            }
-        }
+        dl_nvpw = load_dynamic_syms(papi_cuda_root, dlname, standard_paths);
     }
 
     if (!dl_nvpw) {

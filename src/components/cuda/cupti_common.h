@@ -82,6 +82,7 @@ extern CUptiResult ( *cuptiGetVersionPtr ) (uint32_t* );
         }  \
     } while (0);
 
+void* load_dynamic_syms(const char *parent_path, const char *dlname, const char *search_subpaths[]);
 int util_unload_cuda_sym(void);
 int get_device_count(void);
 int cupti_common_init(const char **pdisabled_reason);

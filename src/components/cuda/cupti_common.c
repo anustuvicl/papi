@@ -102,11 +102,35 @@ static int unload_cuda_sym(void)
     return PAPI_OK;
 }
 
+void* load_dynamic_syms(const char *parent_path, const char *dlname, const char *search_subpaths[])
+{
+    void *dl = NULL;
+    char lookup_path[PATH_MAX];
+    char *found_files[MAX_FILES];
+    int i, count;
+    for (i = 0; search_subpaths[i] != NULL; i++) {
+        sprintf(lookup_path, search_subpaths[i], parent_path, dlname);
+        dl = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
+        if (dl) {
+            return dl;
+        }
+    }
+    count = search_files_in_path(dlname, parent_path, found_files);
+    for (i = 0; i < count; i++) {
+        dl = dlopen(found_files[i], RTLD_NOW | RTLD_GLOBAL);
+        if (dl) {
+            break;
+        }
+    }
+    for (i = 0; i < count; i++) {
+        papi_free(found_files[i]);
+    }
+    return dl;
+}
+
 static int load_cudart_sym(void)
 {
     char dlname[] = "libcudart.so";
-    int count, i;
-    char *found_files[MAX_FILES];
     char lookup_path[PATH_MAX];
 
     char *papi_cuda_runtime = getenv("PAPI_CUDA_RUNTIME");
@@ -115,33 +139,16 @@ static int load_cudart_sym(void)
         dl_rt = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
     }
 
-    char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
     const char *standard_paths[] = {
         "%s/lib64/%s",
+        NULL,
     };
-    int num_standard_paths = sizeof(standard_paths) / sizeof(standard_paths[0]);
 
+    char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
     if (papi_cuda_root && !dl_rt) {
-
-        for (i = 0; i < num_standard_paths; i++) {
-            sprintf(lookup_path, standard_paths[i], papi_cuda_root, dlname);
-            dl_rt = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
-            if (dl_rt) break;
-        }
-
-        if (!dl_rt) {
-            count = search_files_in_path(dlname, papi_cuda_root, found_files);
-            for (i = 0; i < count; i++) {
-                dl_rt = dlopen(found_files[i], RTLD_NOW | RTLD_GLOBAL);
-                if (dl_rt) {
-                    break;
-                }
-            }
-            for (i = 0; i < count; i++) {
-                papi_free(found_files[i]);
-            }
-        }
+        dl_rt = load_dynamic_syms(papi_cuda_root, dlname, standard_paths);
     }
+
     if (!dl_rt) {
         dl_rt = dlopen(dlname, RTLD_NOW | RTLD_GLOBAL);
         if (!dl_rt) {
@@ -187,8 +194,6 @@ static int unload_cudart_sym(void)
 static int load_cupti_common_sym(void)
 {
     char dlname[] = "libcupti.so";
-    int count, i;
-    char *found_files[MAX_FILES];
     char lookup_path[PATH_MAX];
 
     char *papi_cuda_cupti = getenv("PAPI_CUDA_CUPTI");
@@ -197,33 +202,15 @@ static int load_cupti_common_sym(void)
         dl_cupti = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
     }
 
-    char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
     const char *standard_paths[] = {
         "%s/extras/CUPTI/lib64/%s",
         "%s/lib64/%s",
+        NULL,
     };
-    int num_standard_paths = sizeof(standard_paths) / sizeof(standard_paths[0]);
 
+    char *papi_cuda_root = getenv("PAPI_CUDA_ROOT");
     if (papi_cuda_root && !dl_cupti) {
-
-        for (i = 0; i < num_standard_paths; i++) {
-            sprintf(lookup_path, standard_paths[i], papi_cuda_root, dlname);
-            dl_cupti = dlopen(lookup_path, RTLD_NOW | RTLD_GLOBAL);
-            if (dl_cupti) break;
-        }
-
-        if (!dl_cupti) {
-            count = search_files_in_path(dlname, papi_cuda_root, found_files);
-            for (i = 0; i < count; i++) {
-                dl_cupti = dlopen(found_files[i], RTLD_NOW | RTLD_GLOBAL);
-                if (dl_cupti) {
-                    break;
-                }
-            }
-            for (i =0; i < count; i++) {
-                papi_free(found_files[i]);
-            }
-        }
+        dl_cupti = load_dynamic_syms(papi_cuda_root, dlname, standard_paths);
     }
 
     if (!dl_cupti) {

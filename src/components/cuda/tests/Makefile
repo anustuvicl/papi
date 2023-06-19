@@ -2,7 +2,6 @@ NAME=cuda
 include ../../Makefile_comp_tests.target
 
 PAPI_CUDA_ROOT ?= $(shell dirname $(shell dirname $(shell which nvcc)))
-PAPI_CUPTI_ROOT ?= $(PAPI_CUDA_ROOT)/extras/CUPTI
 
 TESTS = HelloWorld simpleMultiGPU \
 		pthreads cudaOpenMP concurrent_profiling \
